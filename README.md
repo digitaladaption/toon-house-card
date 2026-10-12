@@ -10,6 +10,7 @@ A cartoon 3D dollhouse of your home for Home Assistant. You describe your rooms,
 
 ## What it does
 
+- **Start from a picture.** An importer page reads a floor plan image and drafts the house for you.
 - **Your floor plan, in 3D.** Flat cartoon colours, thick ink outlines, patterned floors, a blue sky with puffy clouds.
 - **Three kinds of view.** One cutaway per floor (walls cut low so you can see in), and the whole house from outside with the roof on. Drag to turn, pinch or scroll to zoom.
 - **Devices in the right place.** A blind sits on its window and its slats move with the real position. Lights glow and light the floor. Radiators turn orange when heating. The garage door opens.
@@ -75,6 +76,14 @@ layout: /local/toon-house/house.json
 
 [`examples/example-house.json`](examples/example-house.json) is the two-storey house in the pictures above. Copy it and change the numbers.
 
+## Start from a floor plan picture
+
+If you have a picture of your floor plan, the importer finds the rooms, doors and windows for you and writes the house file. It runs in your browser and the picture stays on your computer.
+
+![The importer](docs/img/importer.png)
+
+You set the scale from one room size, name the rooms, fix anything it got wrong and download `house.json`. It works best on plans with solid walls, like most estate agent plans. See **[docs/importer.md](docs/importer.md)**.
+
 ## How to describe your house
 
 Everything is measured in **metres** on a simple grid, looking down at the plan:
@@ -129,7 +138,7 @@ The `demo` folder is a stand-alone page with stand-in devices.
 python3 -m http.server 8000
 ```
 
-Then open `http://localhost:8000/demo/`. Add `?layout=/path/to/your-house.json` to try your own file.
+Then open `http://localhost:8000/demo/`. Add `?layout=/path/to/your-house.json` to try your own file. The importer is at `http://localhost:8000/importer/`.
 
 ## Building from source
 
@@ -139,7 +148,7 @@ npm run build
 npm test
 ```
 
-The source is in `src/`. `npm run build` writes `dist/toon-house-card.js`.
+The source is in `src/`. `npm run build` writes `dist/toon-house-card.js` and `importer/importer.js`.
 
 ## Good to know
 

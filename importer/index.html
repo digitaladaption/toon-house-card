@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Toon House: floor plan importer</title>
+<style>
+  :root{--ink:#1b1b1b;--sun:#FFD83A;--paper:#FFFDF4}
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%;font-family:"Trebuchet MS","Segoe UI",system-ui,sans-serif;color:var(--ink);background:#6CCBFA}
+  header{padding:10px 16px;display:flex;gap:14px;align-items:baseline;flex-wrap:wrap}
+  h1{margin:0;font-size:22px;font-weight:900}
+  header span{font-size:13px;font-weight:700}
+  main{display:grid;grid-template-columns:minmax(0,1.25fr) minmax(320px,1fr);gap:12px;padding:0 12px 12px;height:calc(100% - 52px)}
+  section{background:var(--paper);border:3px solid var(--ink);border-radius:14px;box-shadow:3px 4px 0 var(--ink);padding:10px;overflow:auto;min-height:0}
+  button,.filebtn{font:inherit;font-weight:800;font-size:13px;padding:6px 10px;border:2px solid var(--ink);border-radius:10px;background:#fff;color:var(--ink);cursor:pointer;box-shadow:1px 2px 0 var(--ink)}
+  button.on{background:var(--sun)}
+  button.go{background:var(--sun);font-size:15px;padding:8px 14px}
+  .tools{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-bottom:8px}
+  .tools label{font-size:12px;font-weight:700;display:flex;gap:4px;align-items:center}
+  #swatch{display:inline-block;width:18px;height:18px;border:2px solid var(--ink);border-radius:5px;vertical-align:middle}
+  #plan{max-width:100%;height:auto;display:block;border:2px solid var(--ink);border-radius:8px;background:#fff;touch-action:none}
+  #status{margin:8px 0;padding:8px 10px;border:2px solid var(--ink);border-radius:10px;background:#fff;font-weight:700;font-size:14px}
+  #status.bad{background:#FFD0C2}
+  #empty{padding:40px 16px;text-align:center}
+  #empty p{max-width:520px;margin:10px auto;font-size:15px;line-height:1.45}
+  .floor{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:6px 0;font-size:13px}
+  .floor label{display:flex;gap:4px;align-items:center}
+  input[type=text],input[type=number],input:not([type]){font:inherit;padding:5px 7px;border:2px solid var(--ink);border-radius:8px;min-width:0}
+  .fname{width:120px;font-weight:800}
+  input[type=number]{width:70px}
+  h2{font-size:15px;margin:12px 0 6px}
+  #room{border:2px dashed var(--ink);border-radius:10px;padding:8px;margin:8px 0;font-size:13px}
+  #room .row{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:6px 0}
+  #preview{height:420px;border:2px solid var(--ink);border-radius:10px;overflow:hidden;background:#6CCBFA}
+  .key{display:flex;gap:10px;flex-wrap:wrap;font-size:12px;font-weight:700;margin:6px 0}
+  .key i{display:inline-block;width:14px;height:8px;border:1px solid var(--ink);margin-right:3px;vertical-align:middle}
+  ol{margin:6px 0 6px 18px;padding:0;font-size:13px;line-height:1.5}
+  small{font-size:12px}
+  @media (max-width:900px){main{grid-template-columns:1fr;height:auto}#preview{height:300px}}
+</style>
+</head>
+<body>
+<header><h1>Floor plan importer</h1><span>Turn a floor plan picture into a house for Toon House Card. The picture stays on this computer.</span></header>
+<main>
+  <section>
+    <div class="tools">
+      <label class="filebtn">Choose a plan picture<input id="file" type="file" accept="image/*" hidden></label>
+      <button id="rotate" title="Turn the picture so the front of the house is at the bottom">Turn a quarter</button>
+      <button id="undo">Undo</button>
+    </div>
+    <div id="empty">
+      <h2 style="font-size:20px">Drop a floor plan here</h2>
+      <p>An estate agent's plan works well: a JPG, PNG or WebP with solid or dark walls. For a PDF, take a screenshot first.</p>
+      <p>It works best when the front of the house is at the bottom of the picture.</p>
+    </div>
+    <div id="work" style="display:none">
+      <div class="tools">
+        <button data-tool="select">Select</button>
+        <button data-tool="wall">Add a wall</button>
+        <button data-tool="merge">Join two rooms</button>
+        <button data-tool="remove">Remove a room</button>
+        <button data-tool="measure">Measure for scale</button>
+        <button data-tool="box">Mark a floor</button>
+        <button data-tool="colour">Pick wall colour</button>
+        <span id="swatch" title="Wall colour in use"></span>
+        <label>Match <input id="tolerance" type="range" min="50" max="200" value="110" title="How closely a pixel must match the wall colour"></label>
+      </div>
+      <div id="status"></div>
+      <canvas id="plan"></canvas>
+      <div class="key"><span><i style="background:#00c8ff"></i>window</span><span><i style="background:#ff00c8"></i>inside door</span><span><i style="background:#ff9600"></i>open gap</span><span><i style="background:#ff2020"></i>outside door</span><span><i style="background:#7a4fc4"></i>front door</span><span><i style="background:#00c800"></i>patio doors</span><span><i style="background:#784000"></i>garage door</span></div>
+    </div>
+  </section>
+  <section>
+    <h2 style="margin-top:0">How it goes</h2>
+    <ol>
+      <li>Choose your plan. The rooms it finds are tinted.</li>
+      <li>Set the scale: click a room, type its size as printed on the plan and press <b>Set scale</b>. Or use <b>Measure for scale</b> and drag along a length you know.</li>
+      <li>Name the rooms. The name decides the colours (kitchen, bathroom, bedroom...).</li>
+      <li>Fix anything it got wrong with the tools, and click the front door to mark it.</li>
+      <li>Download <b>house.json</b>.</li>
+    </ol>
+    <h2>Floors</h2>
+    <div id="floors"><small>No plan yet.</small></div>
+    <small id="scale"></small>
+    <div id="room" style="display:none">
+      <div class="row"><b>Room name</b><input id="rname" type="text" aria-label="Room name"></div>
+      <div id="rsize"></div>
+      <div class="row"><span>Its real size:</span><label><input id="sw" type="number" step="0.01" placeholder="across"> m across</label><label><input id="sd" type="number" step="0.01" placeholder="down"> m down</label><button id="setscale">Set scale</button></div>
+    </div>
+    <h2>Your house</h2>
+    <div id="preview"></div>
+    <div id="export" style="display:none">
+      <div class="floor"><label>House name <input id="title" type="text" value="My house"></label><label><input id="lights" type="checkbox" checked> Put a planned light in each room</label></div>
+      <div class="tools"><button id="download" class="go">Download house.json</button><button id="copy">Copy card settings</button></div>
+      <small>Put house.json in <b>config/www/toon-house/</b> on Home Assistant. Then add devices to it by hand: see the house file guide in the project's docs.</small>
+    </div>
+  </section>
+</main>
+<script type="module" src="../dist/toon-house-card.js"></script>
+<script type="module" src="./importer.js"></script>
+</body>
+</html>

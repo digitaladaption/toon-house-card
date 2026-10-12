@@ -6,9 +6,9 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "esbuild src/card.js --bundle --format=esm --minify --target=es2020 --outfile=dist/toon-house-card.js",
+    "build": "esbuild src/card.js --bundle --format=esm --minify --target=es2020 --outfile=dist/toon-house-card.js && esbuild src/importer/app.js --bundle --format=esm --minify --target=es2020 --outfile=importer/importer.js",
     "watch": "esbuild src/card.js --bundle --format=esm --target=es2020 --outfile=dist/toon-house-card.js --watch",
-    "test": "node test/geometry.test.mjs",
+    "test": "node test/geometry.test.mjs && node test/detect.test.mjs",
     "demo": "python3 -m http.server 8000"
   },
   "devDependencies": {
