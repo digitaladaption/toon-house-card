@@ -1,6 +1,6 @@
 # Third-party licences
 
-`dist/toon-house-card.js` bundles the two libraries below.
+`dist/toon-house-card.js` bundles the two libraries below. The importer, demo and landing pages also use the Fredoka font.
 
 ## three.js (MIT)
 
@@ -57,3 +57,9 @@ FOR ANY DAMAGES OR OTHER LIABILITY, WHETHER IN CONTRACT, TORT OR OTHERWISE,
 ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 ```
+
+## Fredoka font (SIL Open Font License 1.1)
+
+Used by the importer, demo and landing pages. The font files and the full licence text are in `assets/fonts/` (`OFL.txt`).
+
+Copyright 2016 The Fredoka Project Authors (https://github.com/hafontia/Fredoka-One)

@@ -3,100 +3,266 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Toon House: floor plan importer</title>
+<title>Toon House Builder</title>
+<link rel="icon" href="../assets/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="../assets/toon.css">
 <style>
-  :root{--ink:#1b1b1b;--sun:#FFD83A;--paper:#FFFDF4}
-  *{box-sizing:border-box}
-  html,body{margin:0;height:100%;font-family:"Trebuchet MS","Segoe UI",system-ui,sans-serif;color:var(--ink);background:#6CCBFA}
-  header{padding:10px 16px;display:flex;gap:14px;align-items:baseline;flex-wrap:wrap}
-  h1{margin:0;font-size:22px;font-weight:900}
-  header span{font-size:13px;font-weight:700}
-  main{display:grid;grid-template-columns:minmax(0,1.25fr) minmax(320px,1fr);gap:12px;padding:0 12px 12px;height:calc(100% - 52px)}
-  section{background:var(--paper);border:3px solid var(--ink);border-radius:14px;box-shadow:3px 4px 0 var(--ink);padding:10px;overflow:auto;min-height:0}
-  button,.filebtn{font:inherit;font-weight:800;font-size:13px;padding:6px 10px;border:2px solid var(--ink);border-radius:10px;background:#fff;color:var(--ink);cursor:pointer;box-shadow:1px 2px 0 var(--ink)}
-  button.on{background:var(--sun)}
-  button.go{background:var(--sun);font-size:15px;padding:8px 14px}
-  .tools{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-bottom:8px}
-  .tools label{font-size:12px;font-weight:700;display:flex;gap:4px;align-items:center}
-  #swatch{display:inline-block;width:18px;height:18px;border:2px solid var(--ink);border-radius:5px;vertical-align:middle}
-  #plan{max-width:100%;height:auto;display:block;border:2px solid var(--ink);border-radius:8px;background:#fff;touch-action:none}
-  #status{margin:8px 0;padding:8px 10px;border:2px solid var(--ink);border-radius:10px;background:#fff;font-weight:700;font-size:14px}
-  #status.bad{background:#FFD0C2}
-  #empty{padding:40px 16px;text-align:center}
-  #empty p{max-width:520px;margin:10px auto;font-size:15px;line-height:1.45}
-  .floor{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:6px 0;font-size:13px}
-  .floor label{display:flex;gap:4px;align-items:center}
-  input[type=text],input[type=number],input:not([type]){font:inherit;padding:5px 7px;border:2px solid var(--ink);border-radius:8px;min-width:0}
-  .fname{width:120px;font-weight:800}
-  input[type=number]{width:70px}
-  h2{font-size:15px;margin:12px 0 6px}
-  #room{border:2px dashed var(--ink);border-radius:10px;padding:8px;margin:8px 0;font-size:13px}
-  #room .row{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:6px 0}
-  #preview{height:420px;border:2px solid var(--ink);border-radius:10px;overflow:hidden;background:#6CCBFA}
-  .key{display:flex;gap:10px;flex-wrap:wrap;font-size:12px;font-weight:700;margin:6px 0}
-  .key i{display:inline-block;width:14px;height:8px;border:1px solid var(--ink);margin-right:3px;vertical-align:middle}
-  ol{margin:6px 0 6px 18px;padding:0;font-size:13px;line-height:1.5}
-  small{font-size:12px}
-  @media (max-width:900px){main{grid-template-columns:1fr;height:auto}#preview{height:300px}}
+  body{display:flex;flex-direction:column;min-height:100vh;min-height:100dvh}
+  header{display:flex;align-items:center;gap:14px;padding:10px 16px 6px;flex-wrap:wrap}
+  .logo{display:flex;align-items:center;gap:8px;font-size:24px;font-weight:700;color:var(--ink);text-decoration:none;text-shadow:2px 2px 0 #fff}
+  .logo svg{width:44px;height:46px}
+  #dots{display:flex;gap:6px;align-items:center;margin-left:auto;flex-wrap:wrap}
+  .dot{font:inherit;font-weight:700;font-size:15px;width:38px;height:38px;border-radius:50%;border:var(--line) solid var(--ink);background:#fff;color:var(--ink);cursor:pointer;box-shadow:1px 2px 0 var(--ink);display:grid;place-items:center;padding:0}
+  .dot.done{background:#9BE37A}
+  .dot.now{background:var(--sun);transform:scale(1.18) rotate(-4deg)}
+  .dot[disabled]{opacity:.45;cursor:default}
+  #dots i{width:12px;height:4px;background:var(--ink);border-radius:2px}
+
+  main{flex:1;display:grid;gap:14px;padding:6px 14px 14px;grid-template-columns:minmax(300px,380px) minmax(0,1.15fr) minmax(0,1fr);grid-template-areas:"guide stage preview";align-items:start}
+  #guide{grid-area:guide;padding:14px}
+  #stage{grid-area:stage;padding:12px;position:relative}
+  #previewBox{grid-area:preview;position:relative}
+
+  .talk{display:flex;gap:10px;align-items:flex-start}
+  #roofus{flex:none;width:96px;animation:bob 3s ease-in-out infinite;transform-origin:50% 100%}
+  #roofus svg{display:block;width:100%}
+  #roofus .puff{animation:puff 3s ease-in-out infinite;transform-origin:95px 12px}
+  #roofus.jump{animation:jump .7s ease-out 2}
+  @keyframes bob{50%{transform:translateY(-4px) rotate(-1.5deg)}}
+  @keyframes puff{50%{transform:translate(3px,-5px) scale(1.15)}}
+  @keyframes jump{30%{transform:translateY(-18px) scale(1.06,.96)}60%{transform:translateY(0) scale(.97,1.04)}}
+  .bubble{position:relative;flex:1;background:#fff;border:var(--line) solid var(--ink);border-radius:18px;padding:10px 14px;box-shadow:2px 3px 0 var(--ink);min-height:74px}
+  .bubble::before{content:"";position:absolute;left:-13px;top:26px;width:20px;height:20px;background:#fff;border-left:var(--line) solid var(--ink);border-bottom:var(--line) solid var(--ink);transform:rotate(45deg)}
+  .bubble.bad{background:#FFE1D8}
+  .bubble.bad::before{background:#FFE1D8}
+  .bubble h2{font-size:21px;line-height:1.15;margin-bottom:4px}
+  .bubble p{margin:0;font-size:16px;line-height:1.35}
+
+  #controls{margin-top:14px}
+  .step{display:none}
+  .step.show{display:block;animation:pop .25s ease-out}
+  @keyframes pop{from{transform:scale(.97);opacity:0}}
+  .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin:10px 0}
+  .col{display:flex;flex-direction:column;gap:10px;margin:10px 0}
+  .hint{font-size:14px;opacity:.85;margin:6px 0}
+  .stickers{display:grid;grid-template-columns:repeat(auto-fill,minmax(98px,1fr));gap:8px;margin:10px 0}
+  .sticker{flex-direction:column;gap:2px;font-size:13px;min-height:74px;padding:6px 4px;border-radius:16px;line-height:1.1;text-align:center}
+  .sticker svg{width:34px;height:34px}
+  .sticker:nth-child(3n+1):hover{transform:rotate(-3deg) scale(1.05)}
+  .sticker:nth-child(3n+2):hover{transform:rotate(2deg) scale(1.05)}
+  .sticker:nth-child(3n):hover{transform:rotate(-1deg) scale(1.05)}
+  .chosen{font-weight:700;font-size:18px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+  .pill{display:inline-flex;align-items:center;gap:6px;border:2px solid var(--ink);border-radius:999px;padding:3px 10px 3px 6px;background:#fff;font-size:14px;font-weight:700}
+  .pill svg{width:22px;height:22px}
+  .pill i{width:18px;height:10px;border:2px solid var(--ink);border-radius:3px;display:inline-block}
+  .keys{display:flex;gap:6px;flex-wrap:wrap;margin:10px 0}
+  details.fix{border:var(--line) dashed var(--ink);border-radius:16px;padding:8px 12px;margin:12px 0;background:#fff8}
+  details.fix summary{font-weight:700;cursor:pointer;font-size:16px;min-height:32px}
+  .size{display:flex;gap:8px;align-items:center;flex-wrap:wrap;font-size:16px}
+  .size input[type=number]{width:92px}
+  .floorCard{border:var(--line) solid var(--ink);border-radius:16px;padding:10px;margin:10px 0;background:#fff}
+  .pad{display:grid;grid-template-columns:repeat(3,48px);grid-template-rows:repeat(2,48px);gap:4px}
+  .pad .btn{min-height:0;padding:0;width:48px;height:48px}
+  .pad .u{grid-column:2}.pad .l{grid-column:1;grid-row:2}.pad .d{grid-column:2;grid-row:2}.pad .r{grid-column:3;grid-row:2}
+  .switch{display:flex;align-items:center;gap:10px;font-size:16px;cursor:pointer}
+  .switch input{appearance:none;-webkit-appearance:none;width:54px;height:30px;border:var(--line) solid var(--ink);border-radius:999px;background:#ddd;position:relative;cursor:pointer;flex:none;margin:0}
+  .switch input::after{content:"";position:absolute;left:2px;top:2px;width:20px;height:20px;border-radius:50%;background:#fff;border:2px solid var(--ink);transition:left .15s}
+  .switch input:checked{background:#9BE37A}
+  .switch input:checked::after{left:24px}
+  ol.todo{margin:8px 0 0;padding-left:22px;font-size:15px;line-height:1.5}
+
+  #drop{display:grid;place-items:center;text-align:center;min-height:min(60vh,520px);border:4px dashed var(--ink);border-radius:18px;background:repeating-linear-gradient(45deg,#fff,#fff 16px,#FFF6D6 16px,#FFF6D6 32px);padding:20px;cursor:pointer}
+  #drop.over{background:var(--sun)}
+  #drop h2{font-size:28px}
+  #drop p{font-size:17px;max-width:420px;margin:8px auto}
+  #drop .arrow{width:72px;height:72px;margin:0 auto 6px;animation:bob 1.4s ease-in-out infinite}
+  #drop .arrow svg{width:100%;height:100%}
+  #planWrap{position:relative}
+  #plan{display:block;width:100%;max-height:calc(100vh - 250px);object-fit:contain;border:var(--line) solid var(--ink);border-radius:12px;background:#fff;touch-action:none}
+  #tabs{margin:0 0 10px}
+  #tabs .btn{min-height:40px;padding:4px 14px;font-size:15px}
+  #tool{position:absolute;left:10px;top:10px;z-index:3;display:none;background:var(--sun);border:var(--line) solid var(--ink);border-radius:999px;padding:4px 12px;font-weight:700;font-size:14px;box-shadow:1px 2px 0 var(--ink);align-items:center;gap:8px}
+  #tool button{font:inherit;font-weight:700;border:0;background:none;cursor:pointer;text-decoration:underline;padding:0;color:var(--ink)}
+
+  #preview{height:min(62vh,560px);min-height:300px;border:var(--line) solid var(--ink);border-radius:var(--r);overflow:hidden;background:var(--sky);box-shadow:var(--drop)}
+  #previewEmpty{height:100%;display:grid;place-items:center;text-align:center;padding:20px;font-size:18px;font-weight:700}
+  #previewToggle{display:none}
+  #previewLabel{font-weight:700;font-size:18px;margin:0 0 6px 4px;text-shadow:2px 2px 0 #fff}
+
+  footer{position:sticky;bottom:0;z-index:20;display:flex;gap:10px;align-items:center;padding:10px 14px calc(10px + env(safe-area-inset-bottom));background:var(--grass);border-top:var(--line) solid var(--ink)}
+  footer .spacer{flex:1}
+  body.noplan footer{display:none}
+
+  #modal{position:fixed;inset:0;z-index:60;background:#0006;display:none;place-items:center;padding:16px}
+  #modal .panel{padding:18px;max-width:400px;width:100%}
+  #confetti{position:fixed;inset:0;pointer-events:none;z-index:70;overflow:hidden}
+  #confetti i{position:absolute;top:-20px;width:12px;height:16px;border:2px solid var(--ink);border-radius:3px;animation:fall linear forwards}
+  @keyframes fall{to{transform:translateY(110vh) rotate(720deg)}}
+
+  body.step-done main{grid-template-areas:"guide preview preview"}
+  body.step-done #stage{display:none}
+  body.step-done #preview{height:min(70vh,640px)}
+
+  @media (max-width:1180px){
+    main{grid-template-columns:minmax(280px,360px) minmax(0,1fr);grid-template-areas:"guide stage"}
+    body.step-done main{grid-template-areas:"guide preview"}
+    /* the 3D house shrinks to a live button in the grass bar; tap it to look */
+    body:not(.step-done) #previewBox{position:fixed;left:50%;bottom:calc(8px + env(safe-area-inset-bottom));margin-left:-32px;z-index:30;width:64px;height:64px}
+    body:not(.step-done) #previewLabel{display:none}
+    body:not(.step-done) #preview{width:400px;height:400px;min-height:0;transform:scale(.16);transform-origin:0 0;position:absolute;left:0;top:0;pointer-events:none;border-width:14px;border-radius:90px;box-shadow:none}
+    body:not(.step-done) #previewToggle{display:flex;position:absolute;inset:0;width:100%;height:100%;min-height:0;opacity:0;cursor:zoom-in}
+    body.peek:not(.step-done) #previewBox{inset:12px 12px calc(90px + env(safe-area-inset-bottom)) 12px;margin:0;width:auto;height:auto}
+    body.peek:not(.step-done) #preview{position:static;width:100%;height:100%;transform:none;pointer-events:auto;border-width:3px;border-radius:var(--r);box-shadow:var(--drop)}
+    body.peek:not(.step-done) #previewToggle{inset:auto;right:10px;top:10px;width:48px;height:48px;opacity:1;cursor:pointer;z-index:2}
+    body.noplan #previewBox{display:none}
+  }
+  @media (max-width:760px){
+    main{display:flex;flex-direction:column;gap:10px;padding:4px 10px 12px}
+    /* on a phone the plan goes between Roofus and the buttons, so you never scroll to find it */
+    #guide{display:contents}
+    .talk{order:1}
+    #stage{order:2;padding:8px}
+    #controls{order:3;margin-top:0;background:var(--paper);border:var(--line) solid var(--ink);border-radius:var(--r);box-shadow:var(--drop);padding:10px 12px}
+    #previewBox{order:4}
+    body.noplan #stage{order:4}
+    body.step-done #stage{display:none}
+    body.step-done #preview{height:52vh}
+    .logo{font-size:20px}.logo svg{width:36px;height:38px}
+    header{padding:8px 10px 2px}
+    #dots{margin-left:0;width:100%;justify-content:space-between}
+    #dots i{display:none}
+    .dot{width:36px;height:36px}
+    #roofus{width:70px}
+    .bubble h2{font-size:19px}
+    .bubble p{font-size:15px}
+    #drop{min-height:30vh}
+    #plan{max-height:46vh}
+    .stickers{grid-template-columns:repeat(3,1fr)}
+    footer .btn:not(.go) span:not([data-icon]){display:none}
+  }
+  @media (prefers-reduced-motion:reduce){#roofus,#roofus .puff,#drop .arrow,.step.show{animation:none}}
 </style>
 </head>
-<body>
-<header><h1>Floor plan importer</h1><span>Turn a floor plan picture into a house for Toon House Card. The picture stays on this computer.</span></header>
+<body class="toon noplan step-plan">
+<header>
+  <a class="logo" href="../"><span id="logoArt"></span>Toon House Builder</a>
+  <nav id="dots" aria-label="Steps"></nav>
+</header>
+
 <main>
-  <section>
-    <div class="tools">
-      <label class="filebtn">Choose a plan picture<input id="file" type="file" accept="image/*" hidden></label>
-      <button id="rotate" title="Turn the picture so the front of the house is at the bottom">Turn a quarter</button>
-      <button id="undo">Undo</button>
+  <section id="guide" class="panel">
+    <div class="talk">
+      <div id="roofus"></div>
+      <div id="bubble" class="bubble" aria-live="polite"><h2 id="stitle"></h2><p id="status"></p></div>
     </div>
-    <div id="empty">
-      <h2 style="font-size:20px">Drop a floor plan here</h2>
-      <p>An estate agent's plan works well: a JPG, PNG or WebP with solid or dark walls. For a PDF, take a screenshot first.</p>
-      <p>It works best when the front of the house is at the bottom of the picture.</p>
-    </div>
-    <div id="work" style="display:none">
-      <div class="tools">
-        <button data-tool="select">Select</button>
-        <button data-tool="wall">Add a wall</button>
-        <button data-tool="merge">Join two rooms</button>
-        <button data-tool="remove">Remove a room</button>
-        <button data-tool="measure">Measure for scale</button>
-        <button data-tool="box">Mark a floor</button>
-        <button data-tool="colour">Pick wall colour</button>
-        <span id="swatch" title="Wall colour in use"></span>
-        <label>Match <input id="tolerance" type="range" min="50" max="200" value="110" title="How closely a pixel must match the wall colour"></label>
+    <div id="controls">
+
+      <div class="step" data-for="plan">
+        <div class="col">
+          <label class="btn big go" id="chooseBtn"><span data-icon="upload"></span>Choose a picture<input id="file" type="file" accept="image/*" hidden></label>
+          <button class="btn" id="tryExample"><span data-icon="example"></span>Try the example plan</button>
+        </div>
+        <p class="hint">A JPG, PNG or WebP of your floor plan. An estate agent's plan with solid walls works best. Your picture stays on this device.</p>
       </div>
-      <div id="status"></div>
-      <canvas id="plan"></canvas>
-      <div class="key"><span><i style="background:#00c8ff"></i>window</span><span><i style="background:#ff00c8"></i>inside door</span><span><i style="background:#ff9600"></i>open gap</span><span><i style="background:#ff2020"></i>outside door</span><span><i style="background:#7a4fc4"></i>front door</span><span><i style="background:#00c800"></i>patio doors</span><span><i style="background:#784000"></i>garage door</span></div>
+
+      <div class="step" data-for="check">
+        <div class="row">
+          <button class="btn go" id="looksRight"><span data-icon="yes"></span>Yes, looks right</button>
+          <button class="btn" id="notQuite"><span data-icon="no"></span>Not quite</button>
+        </div>
+        <div id="helper" style="display:none">
+          <p class="hint">Try one of these, then look again.</p>
+          <div class="col">
+            <button class="btn" data-tool="colour"><span data-icon="colour"></span>Show me a wall<span id="swatch" class="pill" style="padding:3px 8px"><i></i></span></button>
+            <label class="size">Walls match <input id="tolerance" type="range" min="50" max="200" value="110" style="flex:1" aria-label="How closely a colour must match the walls"></label>
+            <button class="btn" id="rotate"><span data-icon="turn"></span>Turn the picture</button>
+            <button class="btn" data-tool="box"><span data-icon="floor"></span>Draw a box round a floor</button>
+            <button class="btn" id="otherPlan"><span data-icon="upload"></span>Use a different picture</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="step" data-for="size">
+        <div id="sizeNone" class="hint">Tap any room on the plan first.</div>
+        <div id="sizeBox" style="display:none">
+          <div class="chosen"><span class="pill" id="sizeRoom"></span></div>
+          <p class="hint" id="rsize"></p>
+          <div class="size"><input id="sw" class="toon" type="number" step="0.01" min="0" inputmode="decimal" aria-label="Metres across"> m across</div>
+          <div class="size" style="margin-top:8px"><input id="sd" class="toon" type="number" step="0.01" min="0" inputmode="decimal" aria-label="Metres down"> m down</div>
+          <div class="row"><button class="btn go" id="setscale"><span data-icon="yes"></span>That's the size</button></div>
+        </div>
+        <div class="row"><button class="btn" data-tool="measure"><span data-icon="measure"></span>Measure a line instead</button></div>
+        <p class="hint" id="scale"></p>
+      </div>
+
+      <div class="step" data-for="rooms">
+        <div id="roomNone" class="hint">Tap a room on the plan.</div>
+        <div id="roomBox" style="display:none">
+          <div class="chosen">This room is... <span class="pill" id="roomNow"></span></div>
+          <div class="stickers" id="stickers"></div>
+          <div class="row"><input id="rname" class="toon" type="text" placeholder="Or type a name" aria-label="Room name" style="flex:1"><button class="btn" id="rnameOk">OK</button></div>
+        </div>
+        <details class="fix"><summary>Something looks wrong?</summary>
+          <div class="col">
+            <button class="btn" data-tool="wall"><span data-icon="wall"></span>Add a wall (split a room)</button>
+            <button class="btn" data-tool="merge"><span data-icon="join"></span>Join two rooms</button>
+            <button class="btn" data-tool="remove"><span data-icon="remove"></span>That's not a room</button>
+          </div>
+        </details>
+      </div>
+
+      <div class="step" data-for="doors">
+        <div class="keys" id="keys"></div>
+        <p class="hint">Tap a coloured strip again to change it to the next kind. "Nothing here" removes it.</p>
+      </div>
+
+      <div class="step" data-for="floors"><div id="floors"></div></div>
+
+      <div class="step" data-for="done">
+        <div class="col">
+          <label class="size">House name <input id="title" class="toon" type="text" value="My house" style="flex:1"></label>
+          <label class="switch"><input id="lights" type="checkbox" checked>Put a light in each room, ready to connect</label>
+          <button class="btn big go" id="download"><span data-icon="save"></span>Save my house</button>
+          <button class="btn" id="copy"><span data-icon="copy"></span>Copy the card settings</button>
+        </div>
+        <ol class="todo">
+          <li>Put <b>house.json</b> in <b>config/www/toon-house/</b> on Home Assistant.</li>
+          <li>Add the Toon House Card to a dashboard and paste the card settings.</li>
+          <li>Connect your real lights and blinds: see the <a href="https://github.com/digitaladaption/toon-house-card/blob/main/docs/house-file.md#devices">house file guide</a>.</li>
+        </ol>
+        <div class="row"><button class="btn ghost" id="again">Start again with another plan</button></div>
+      </div>
     </div>
   </section>
-  <section>
-    <h2 style="margin-top:0">How it goes</h2>
-    <ol>
-      <li>Choose your plan. The rooms it finds are tinted.</li>
-      <li>Set the scale: click a room, type its size as printed on the plan and press <b>Set scale</b>. Or use <b>Measure for scale</b> and drag along a length you know.</li>
-      <li>Name the rooms. The name decides the colours (kitchen, bathroom, bedroom...).</li>
-      <li>Fix anything it got wrong with the tools, and click the front door to mark it.</li>
-      <li>Download <b>house.json</b>.</li>
-    </ol>
-    <h2>Floors</h2>
-    <div id="floors"><small>No plan yet.</small></div>
-    <small id="scale"></small>
-    <div id="room" style="display:none">
-      <div class="row"><b>Room name</b><input id="rname" type="text" aria-label="Room name"></div>
-      <div id="rsize"></div>
-      <div class="row"><span>Its real size:</span><label><input id="sw" type="number" step="0.01" placeholder="across"> m across</label><label><input id="sd" type="number" step="0.01" placeholder="down"> m down</label><button id="setscale">Set scale</button></div>
-    </div>
-    <h2>Your house</h2>
-    <div id="preview"></div>
-    <div id="export" style="display:none">
-      <div class="floor"><label>House name <input id="title" type="text" value="My house"></label><label><input id="lights" type="checkbox" checked> Put a planned light in each room</label></div>
-      <div class="tools"><button id="download" class="go">Download house.json</button><button id="copy">Copy card settings</button></div>
-      <small>Put house.json in <b>config/www/toon-house/</b> on Home Assistant. Then add devices to it by hand: see the house file guide in the project's docs.</small>
-    </div>
+
+  <section id="stage" class="panel">
+    <div id="drop"><div><div class="arrow" data-icon="upload"></div><h2>Drop your floor plan here</h2><p>or tap to choose a picture</p></div></div>
+    <div id="tabs" class="row" style="display:none"></div>
+    <div id="planWrap"><div id="tool"><span id="toolName"></span><button id="toolStop">stop</button></div>
+    <canvas id="plan" style="display:none"></canvas></div>
   </section>
+
+  <aside id="previewBox">
+    <div id="previewLabel">Your house so far</div>
+    <div id="preview"><div id="previewEmpty">Your 3D house will appear here.</div></div>
+    <button id="previewToggle" class="btn" aria-label="Show or hide the 3D house"><span data-icon="close"></span></button>
+  </aside>
 </main>
+
+<footer>
+  <button class="btn" id="back"><span data-icon="back"></span><span>Back</span></button>
+  <button class="btn" id="undo"><span data-icon="undo"></span><span>Undo</span></button>
+  <div class="spacer"></div>
+  <button class="btn big go" id="next"><span>Next</span><span data-icon="next"></span></button>
+</footer>
+
+<div id="modal"><div class="panel">
+  <h2>How long is that line?</h2>
+  <div class="size" style="margin:14px 0"><input id="mlen" class="toon" type="number" step="0.01" min="0" inputmode="decimal" aria-label="Length in metres"> metres</div>
+  <div class="row"><button class="btn go" id="mok"><span data-icon="yes"></span>OK</button><button class="btn" id="mcancel">Cancel</button></div>
+</div></div>
+<div id="confetti"></div>
+
 <script type="module" src="../dist/toon-house-card.js"></script>
 <script type="module" src="./importer.js"></script>
 </body>

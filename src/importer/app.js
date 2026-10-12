@@ -1,29 +1,127 @@
-// Floor plan importer: upload a plan picture, find the rooms, tidy them up, download a house file.
+// Toon House Builder: upload a plan picture, find the rooms, tidy them up, download a house file.
 // Everything happens in this browser tab. The picture is never sent anywhere.
 import { wallMask, wallThickness, findFloors, inkMask, detectFloor, toFloor, guessNames, cleanFloor } from "./detect.js";
+import { roofus, ICON } from "./art.js";
 
 const $ = (id) => document.getElementById(id);
 const MAX_SIDE = 2200;
-const KIND_COLOUR = { window: "#00c8ff", door: "#ff00c8", opening: "#ff9600", extdoor: "#ff2020", frontdoor: "#7a4fc4", bifold: "#00c800", garage: "#784000" };
-const KIND_NAME = { window: "window", door: "inside door", opening: "open gap", extdoor: "outside door", frontdoor: "front door", bifold: "patio doors", garage: "garage door" };
+const KIND = {
+  window: { colour: "#00c8ff", name: "Window", icon: "window" },
+  door: { colour: "#ff00c8", name: "Inside door", icon: "door" },
+  opening: { colour: "#ff9600", name: "Open gap", icon: "opening" },
+  extdoor: { colour: "#ff2020", name: "Outside door", icon: "extdoor" },
+  frontdoor: { colour: "#7a4fc4", name: "Front door", icon: "frontdoor" },
+  bifold: { colour: "#00c800", name: "Patio doors", icon: "bifold" },
+  garage: { colour: "#784000", name: "Garage door", icon: "garageDoor" },
+  none: { colour: "#bdbdbd", name: "Nothing here", icon: "none" },
+};
 const CYCLE_OUT = ["window", "extdoor", "frontdoor", "bifold", "garage", "none"], CYCLE_IN = ["door", "opening", "none"];
-const TOOL_HELP = {
-  select: "Click a room to name it or set the scale. Click a door or window to change what it is.",
-  colour: "Click on a wall in the picture.",
-  wall: "Drag a line where a wall is missing or where one room should be two.",
-  merge: "Click two rooms that should be one.",
-  remove: "Click a room that is not really a room to remove it.",
-  box: "Drag a box round one floor of the plan.",
-  measure: "Drag a line along something whose length you know, such as the width of a room. You will be asked for the length.",
+const STICKERS = [["Kitchen", "kitchen"], ["Living room", "living"], ["Dining room", "dining"], ["Bedroom", "bedroom"], ["Bathroom", "bathroom"], ["Ensuite", "ensuite"], ["WC", "wc"], ["Hall", "hall"], ["Landing", "landing"], ["Stairs", "stairs"], ["Garage", "garage"], ["Utility", "utility"], ["Study", "study"], ["Playroom", "playroom"], ["Store", "store"]];
+const STEPS = ["plan", "check", "size", "rooms", "doors", "floors", "done"];
+const TITLE = { plan: "Hi, I'm Roofus!", check: "Did I find your rooms?", size: "How big is it?", rooms: "Name the rooms", doors: "Doors and windows", floors: "Stack the floors", done: "Ta-da!" };
+const TOOL = {
+  colour: ["Show me a wall", "Tap on a wall in the picture."],
+  wall: ["Adding a wall", "Drag a line where the wall should be. I'll stretch it to the walls either side."],
+  merge: ["Joining rooms", "Tap the two rooms that should be one."],
+  remove: ["Removing a room", "Tap the bit that isn't really a room."],
+  box: ["Marking a floor", "Drag a box right round one floor of the plan."],
+  measure: ["Measuring", "Drag along something you know the length of, like the width of a room."],
 };
 
-const S = { source: null, W: 0, H: 0, rgba: null, colour: null, wall: null, ink: null, t: 0, ppm: 0, ppmSet: false, floors: [], tool: "select", sel: null, mergeFirst: null, history: [], house: null };
-let canvas, ctx, card, previewTimer;
+const S = { source: null, W: 0, H: 0, rgba: null, colour: null, wall: null, ink: null, t: 0, ppm: 0, ppmSet: false, floors: [], tool: "select", sel: null, mergeFirst: null, history: [], house: null, step: "plan", partied: false };
+let canvas, ctx, card, previewTimer, pendingLine = 0;
 
-function status(text, bad) {
-  const el = $("status");
-  el.textContent = text;
-  el.className = bad ? "bad" : "";
+// ---------- Roofus talks ----------
+function say(text, mood = "happy", bad = false) {
+  $("stitle").textContent = TITLE[S.step];
+  $("status").textContent = text;
+  $("bubble").classList.toggle("bad", bad);
+  const r = $("roofus");
+  r.innerHTML = roofus(bad ? "oops" : mood);
+  r.classList.remove("jump");
+  if (mood === "party" && !matchMedia("(prefers-reduced-motion:reduce)").matches) { void r.offsetWidth; r.classList.add("jump"); }
+}
+const status = (text, bad) => say(text, bad ? "oops" : "happy", bad);
+function roomCount() {
+  return S.floors.reduce((a, f) => a + (f.out ? f.out.rooms.length : 0), 0);
+}
+function stepSay() {
+  const rooms = roomCount(), named = S.floors.reduce((a, f) => a + (f.out ? f.out.rooms.filter((r) => isNamed(f, r._region)).length : 0), 0);
+  switch (S.step) {
+    case "plan": say("Give me a picture of your floor plan and I'll build your house.", "happy"); break;
+    case "check":
+      if (!rooms) say("I can't see any rooms yet. Tap \"Not quite\" and show me a wall.", "oops", true);
+      else say(`I found ${S.floors.length} floor${S.floors.length > 1 ? "s" : ""} and ${rooms} rooms, and coloured each one in. Does that look like your home?`, "wow");
+      break;
+    case "size": say(S.ppmSet ? "Got it! Every room is the right size now. Press Next." : "Tap a room, then tell me its size from your plan. One number is enough.", S.ppmSet ? "party" : "think"); break;
+    case "rooms":
+      if (named >= rooms && rooms) say("Every room has a name. Press Next!", "party");
+      else say(`Tap a room, then pick its sticker. ${named} of ${rooms} named so far.`, "happy");
+      break;
+    case "doors": {
+      const front = S.floors.some((f) => f.out && f.out.openings.some((o) => o.kind === "frontdoor"));
+      say(front ? "Front door found! Tap any other strip that looks wrong, or press Next." : "Which one is your front door? Tap its strip until it turns purple.", front ? "party" : "think");
+      break;
+    }
+    case "floors": say("Does upstairs sit in the right place? Check the 3D house and nudge it with the arrows.", "think"); break;
+    case "done": say("Your house is ready! Save it and take it to Home Assistant.", "party"); break;
+    default:
+  }
+}
+function confetti() {
+  if (matchMedia("(prefers-reduced-motion:reduce)").matches) return;
+  const box = $("confetti"), colours = ["#FFD83A", "#F78FB3", "#7FD8BE", "#C9B6FF", "#FF8A73", "#6CCBFA"];
+  for (let i = 0; i < 70; i++) {
+    const p = document.createElement("i");
+    p.style.left = `${Math.random() * 100}%`;
+    p.style.background = colours[i % colours.length];
+    p.style.animationDuration = `${1.6 + Math.random() * 1.6}s`;
+    p.style.animationDelay = `${Math.random() * 0.5}s`;
+    box.appendChild(p);
+    setTimeout(() => p.remove(), 4000);
+  }
+}
+
+// ---------- steps ----------
+function stepsNow() {
+  return STEPS.filter((s) => s !== "floors" || S.floors.filter((f) => f.out && f.out.rooms.length).length > 1);
+}
+function go(step) {
+  if (!S.source && step !== "plan") return;
+  if (!stepsNow().includes(step)) step = "done";
+  S.step = step;
+  document.body.className = `toon step-${step}${S.source ? "" : " noplan"}${document.body.classList.contains("peek") && step !== "done" ? " peek" : ""}`;
+  document.querySelectorAll(".step").forEach((el) => el.classList.toggle("show", el.dataset.for === step));
+  setTool("select", true);
+  S.view = ["size", "rooms", "doors"].includes(step) && S.floors.length > 1 ? (step !== "doors" && S.sel ? S.sel.fi : 0) : null;
+  if (step === "rooms" && !selectedRoom()) pickNextUnnamed();
+  setView(S.view);
+  const list = stepsNow(), at = list.indexOf(step), dots = $("dots");
+  dots.innerHTML = "";
+  list.forEach((s, i) => {
+    if (i) dots.appendChild(document.createElement("i"));
+    const b = document.createElement("button");
+    b.className = `dot${i < at ? " done" : ""}${i === at ? " now" : ""}`;
+    b.dataset.step = s;
+    b.textContent = String(i + 1);
+    b.title = TITLE[s];
+    b.setAttribute("aria-label", `Step ${i + 1}: ${TITLE[s]}`);
+    b.disabled = !S.source && s !== "plan";
+    b.onclick = () => go(s);
+    dots.appendChild(b);
+  });
+  $("back").disabled = at <= 0;
+  $("next").style.visibility = step === "done" ? "hidden" : "visible";
+  panel();
+  draw();
+  stepSay();
+  buildHouse();
+  if (step === "done" && !S.partied) { S.partied = true; confetti(); }
+  window.scrollTo({ top: 0, behavior: "smooth" });
+}
+function move(by) {
+  const list = stepsNow(), at = list.indexOf(S.step);
+  go(list[Math.max(0, Math.min(list.length - 1, at + by))]);
 }
 
 // ---------- loading the picture ----------
@@ -32,7 +130,7 @@ async function loadFile(file) {
   try {
     bmp = await createImageBitmap(file);
   } catch (e) {
-    status("That file could not be opened as a picture. Use a JPG, PNG or WebP (for a PDF, take a screenshot of the plan first).", true);
+    say("I couldn't open that as a picture. Try a JPG, PNG or WebP. For a PDF, take a screenshot of the plan first.", "oops", true);
     return;
   }
   const k = Math.min(1, MAX_SIDE / Math.max(bmp.width, bmp.height)), c = document.createElement("canvas");
@@ -50,11 +148,12 @@ function setSource(c) {
   S.colour = guessWallColour();
   S.ppmSet = false;
   S.history = [];
-  canvas.width = S.W;
-  canvas.height = S.H;
-  $("empty").style.display = "none";
-  $("work").style.display = "";
+  S.partied = false;
+  S.view = null;
+  $("drop").style.display = "none";
+  canvas.style.display = "block";
   analyse();
+  go("check");
 }
 function rotate() {
   if (!S.source) return;
@@ -66,6 +165,7 @@ function rotate() {
   g.rotate(Math.PI / 2);
   g.drawImage(S.source, 0, 0);
   setSource(c);
+  $("helper").style.display = "";
 }
 // walls are usually the most common dark or strongly coloured ink on the plan
 function guessWallColour() {
@@ -103,10 +203,8 @@ function analyse() {
   }
   S.floors = boxes.slice(0, 4).map(newFloor);
   S.sel = null;
-  $("swatch").style.background = `rgb(${S.colour.join(",")})`;
+  S.view = null;
   redetect();
-  if (!S.floors.length) status("No walls found yet. Choose \"Pick wall colour\" and click on a wall in the picture.", true);
-  else status(`Found ${S.floors.length} floor${S.floors.length > 1 ? "s" : ""} and ${S.floors.reduce((a, f) => a + f.out.rooms.length, 0)} rooms. Next: click a room and type its size to set the scale, then name the rooms.`);
 }
 function regionAt(f, x, y) {
   const lx = Math.round(x - f.box.x0), ly = Math.round(y - f.box.y0), d = f.det;
@@ -129,6 +227,7 @@ function seedOf(f, region) {
 }
 const gapCentre = (f, g) => (g.horizontal ? { x: (g.a0 + g.a1) / 2 + f.box.x0, y: (g.l0 + g.l1) / 2 + f.box.y0 } : { x: (g.l0 + g.l1) / 2 + f.box.x0, y: (g.a0 + g.a1) / 2 + f.box.y0 });
 const near = (p, q, d = 8) => Math.abs(p.x - q.x) <= d && Math.abs(p.y - q.y) <= d;
+const isNamed = (f, region) => f.names.some((n) => regionAt(f, n.x, n.y) === region);
 
 function redetect() {
   S.floors.forEach((f, i) => {
@@ -189,17 +288,27 @@ function buildHouse() {
   S.house = house;
   preview();
 }
+function fitPreview() {
+  if (!card) return;
+  const box = $("preview");
+  card.style.setProperty("--toon-house-min-h", "0px");
+  card.style.setProperty("--toon-house-h", `${Math.max(120, box.clientHeight)}px`);
+}
 function preview() {
   clearTimeout(previewTimer);
   previewTimer = setTimeout(() => {
-    $("export").style.display = S.house ? "" : "none";
     if (!S.house) return;
     if (!card) {
       card = document.createElement("toon-house-card");
+      $("preview").innerHTML = "";
       $("preview").appendChild(card);
+      new ResizeObserver(fitPreview).observe($("preview"));
     }
-    card.setConfig({ layout: S.house, height: 420, view: "ground" });
+    // the 3D house shows the same floor as the plan, and the whole house from outside at the end
+    const shown = S.view != null && S.house.floors[S.view] ? S.house.floors[S.view].id : "ground";
+    card.setConfig({ layout: S.house, view: S.step === "floors" || S.step === "done" ? "outside" : shown });
     card.hass = { states: {}, callService() {} };
+    fitPreview();
     window.card = card;
   }, 250);
 }
@@ -208,15 +317,36 @@ function download() {
   a.href = URL.createObjectURL(new Blob([JSON.stringify(S.house, null, 2)], { type: "application/json" }));
   a.download = "house.json";
   a.click();
-  status("Saved house.json. Put it in config/www/toon-house/ on Home Assistant and point the card at /local/toon-house/house.json.");
+  confetti();
+  say("Saved house.json! Now follow the three steps below to put it in Home Assistant.", "party");
 }
 
 // ---------- drawing the plan with what was found ----------
+function pill(text, x, y, size, fill, fg = "#1b1b1b") {
+  ctx.font = `700 ${size}px Fredoka, system-ui, sans-serif`;
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  const w = ctx.measureText(text).width + size * 0.9, h = size * 1.5;
+  ctx.beginPath();
+  ctx.roundRect(x - w / 2, y - h / 2, w, h, h / 2);
+  ctx.fillStyle = fill;
+  ctx.fill();
+  ctx.lineWidth = Math.max(1.5, size / 9);
+  ctx.strokeStyle = "#1b1b1b";
+  ctx.stroke();
+  ctx.fillStyle = fg;
+  ctx.fillText(text, x, y + size * 0.05);
+}
 function draw() {
   if (!S.source) return;
-  ctx.clearRect(0, 0, S.W, S.H);
+  const view = viewRect();
+  if (canvas.width !== view.w || canvas.height !== view.h) { canvas.width = view.w; canvas.height = view.h; }
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.clearRect(0, 0, view.w, view.h);
+  ctx.translate(-view.x, -view.y);
   ctx.drawImage(S.source, 0, 0);
-  const lw = Math.max(2, S.W / 600);
+  const lw = Math.max(2, view.w / 420), font = Math.round(Math.max(13, view.w / 42)), labels = ["rooms", "doors", "floors", "done"].includes(S.step);
+  const pulse = 0.5 + 0.5 * Math.sin(Date.now() / 260);
   S.floors.forEach((f, fi) => {
     if (f.tint) ctx.drawImage(f.tint, f.box.x0, f.box.y0);
     ctx.setLineDash([lw * 4, lw * 3]);
@@ -224,47 +354,58 @@ function draw() {
     ctx.strokeStyle = "#1b1b1b";
     ctx.strokeRect(f.box.x0, f.box.y0, f.box.x1 - f.box.x0, f.box.y1 - f.box.y0);
     ctx.setLineDash([]);
-    ctx.font = `800 ${Math.round(lw * 9)}px system-ui, sans-serif`;
-    ctx.fillStyle = "#1b1b1b";
-    ctx.fillText(f.name, f.box.x0 + 4, f.box.y0 - 6);
     if (!f.out) return;
-    for (const o of f.out.openings) {
-      const g = o._gap, pad = g.virtual ? 0 : 1;
-      ctx.fillStyle = KIND_COLOUR[o.kind] || "#888";
-      if (g.horizontal) ctx.fillRect(g.a0 + f.box.x0, g.l0 + f.box.y0 - pad, g.a1 - g.a0, g.l1 - g.l0 + 1 + 2 * pad);
-      else ctx.fillRect(g.l0 + f.box.x0 - pad, g.a0 + f.box.y0, g.l1 - g.l0 + 1 + 2 * pad, g.a1 - g.a0);
+    const fat = S.step === "doors" ? Math.round(lw * 1.6) : 1;
+    for (const o of f.out.openings.concat(S.step === "doors" ? hiddenOpenings(f) : [])) {
+      const g = o._gap, pad = g.virtual ? 0 : fat;
+      const r = g.horizontal ? [g.a0 + f.box.x0, g.l0 + f.box.y0 - pad, g.a1 - g.a0, g.l1 - g.l0 + 1 + 2 * pad] : [g.l0 + f.box.x0 - pad, g.a0 + f.box.y0, g.l1 - g.l0 + 1 + 2 * pad, g.a1 - g.a0];
+      ctx.fillStyle = (KIND[o.kind] || KIND.none).colour;
+      ctx.fillRect(...r);
+      if (S.step === "doors") { ctx.lineWidth = Math.max(1.5, lw * 0.7); ctx.strokeStyle = "#1b1b1b"; ctx.strokeRect(...r); }
     }
     ctx.strokeStyle = "#ff9600";
     ctx.lineWidth = lw * 1.5;
     for (const v of f.virtualWalls) { ctx.beginPath(); ctx.moveTo(v.x0, v.y0); ctx.lineTo(v.x1, v.y1); ctx.stroke(); }
-    ctx.textAlign = "center";
-    ctx.font = `800 ${Math.round(lw * 7)}px system-ui, sans-serif`;
     for (const r of f.out.rooms) {
       const s = seedOf(f, r._region), picked = S.sel && S.sel.fi === fi && regionAt(f, S.sel.x, S.sel.y) === r._region;
       if (!s) continue;
-      ctx.lineWidth = lw * 2;
-      ctx.strokeStyle = "#fff";
-      ctx.strokeText(r.name, s.x, s.y);
-      ctx.fillStyle = picked ? "#c2185b" : "#1b1b1b";
-      ctx.fillText(r.name, s.x, s.y);
       if (picked) {
         const q = f.det.rooms.find((x) => x.id === r._region);
-        ctx.strokeStyle = "#c2185b";
-        ctx.lineWidth = lw * 1.5;
-        ctx.strokeRect(q.x0 + f.box.x0, q.y0 + f.box.y0, q.x1 - q.x0, q.y1 - q.y0);
+        ctx.strokeStyle = "#7A4FC4";
+        ctx.lineWidth = lw * 2.2;
+        ctx.setLineDash([lw * 3, lw * 2]);
+        ctx.strokeRect(q.x0 + f.box.x0 + lw, q.y0 + f.box.y0 + lw, q.x1 - q.x0 - 2 * lw, q.y1 - q.y0 - 2 * lw);
+        ctx.setLineDash([]);
       }
+      if (!labels) continue;
+      if (S.step === "rooms" && !isNamed(f, r._region)) {
+        const rad = font * (0.95 + 0.18 * pulse);
+        ctx.beginPath();
+        ctx.arc(s.x, s.y, rad, 0, Math.PI * 2);
+        ctx.fillStyle = picked ? "#C9B6FF" : "#FFD83A";
+        ctx.fill();
+        ctx.lineWidth = Math.max(2, font / 7);
+        ctx.strokeStyle = "#1b1b1b";
+        ctx.stroke();
+        ctx.fillStyle = "#1b1b1b";
+        ctx.font = `700 ${Math.round(font * 1.25)}px Fredoka, system-ui, sans-serif`;
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.fillText("?", s.x, s.y + font * 0.06);
+      } else pill(r.name, s.x, s.y, font, picked ? "#C9B6FF" : S.step === "rooms" ? "#9BE37A" : "#fff");
     }
-    ctx.textAlign = "left";
   });
+  ctx.textAlign = "left";
+  ctx.textBaseline = "alphabetic";
   if (S.drag) {
-    ctx.strokeStyle = "#c2185b";
-    ctx.lineWidth = lw * 1.5;
+    ctx.strokeStyle = "#7A4FC4";
+    ctx.lineWidth = lw * 2;
     if (S.tool === "box") ctx.strokeRect(S.drag.x0, S.drag.y0, S.drag.x1 - S.drag.x0, S.drag.y1 - S.drag.y0);
     else { ctx.beginPath(); ctx.moveTo(S.drag.x0, S.drag.y0); ctx.lineTo(S.drag.x1, S.drag.y1); ctx.stroke(); }
   }
 }
 
-// ---------- the side panel ----------
+// ---------- the guide panel ----------
 function selectedRoom() {
   if (!S.sel) return null;
   const f = S.floors[S.sel.fi];
@@ -273,31 +414,72 @@ function selectedRoom() {
   return room ? { f, room, region, box: f.det.rooms.find((q) => q.id === region) } : null;
 }
 function panel() {
+  const sel = selectedRoom();
+  $("swatch").firstElementChild.style.background = S.colour ? `rgb(${S.colour.join(",")})` : "#fff";
+  // size step
+  $("sizeNone").style.display = sel ? "none" : "";
+  $("sizeBox").style.display = sel ? "" : "none";
+  if (sel) {
+    $("sizeRoom").textContent = "The room you tapped";
+    $("rsize").textContent = `I make it ${((sel.box.x1 - sel.box.x0 + 1) / S.ppm).toFixed(2)} m across and ${((sel.box.y1 - sel.box.y0 + 1) / S.ppm).toFixed(2)} m down${S.ppmSet ? "." : ", but that's a guess. What does your plan say?"}`;
+  }
+  $("scale").textContent = S.ppmSet ? "The size is set. You can change it by doing this again." : "Until you set it, I'm guessing your home is about 10 m across.";
+  // rooms step
+  $("roomNone").style.display = sel ? "none" : "";
+  $("roomBox").style.display = sel ? "" : "none";
+  if (sel) {
+    const named = isNamed(sel.f, sel.region);
+    $("roomNow").textContent = named ? sel.room.name : "not named yet";
+    $("rname").value = named ? sel.room.name : "";
+  }
+  // floors step
   const fl = $("floors");
   fl.innerHTML = "";
   S.floors.forEach((f, i) => {
-    const row = document.createElement("div");
-    row.className = "floor";
-    const n = f.out ? f.out.rooms.length : 0, size = f.out && n ? `${f.out.size[0].toFixed(1)} x ${f.out.size[1].toFixed(1)} m` : "";
-    row.innerHTML = `<input class="fname" value="${f.name.replace(/"/g, "&quot;")}" aria-label="Floor name"><span>${n} rooms ${size}</span>
-      ${i > 0 ? `<label>shift right <input class="dx" type="number" step="0.1" value="${f.dx}"></label><label>shift forward <input class="dy" type="number" step="0.1" value="${f.dy}"></label><button class="up" title="Move this floor down a storey">Make lower</button>` : ""}
-      <button class="del" title="Remove this floor">Remove</button>`;
+    const n = f.out ? f.out.rooms.length : 0, row = document.createElement("div");
+    row.className = "floorCard";
+    const moved = [f.dx ? `${Math.abs(f.dx)} m ${f.dx > 0 ? "right" : "left"}` : "", f.dy ? `${Math.abs(f.dy)} m ${f.dy > 0 ? "forward" : "back"}` : ""].filter(Boolean).join(", ");
+    row.innerHTML = `<div class="row" style="margin-top:0"><input class="toon fname" value="${f.name.replace(/"/g, "&quot;")}" aria-label="Floor name" style="flex:1"><span class="pill">${n} rooms</span></div>
+      ${i > 0 ? `<div class="row"><div class="pad"><button class="btn u" aria-label="Move back">${ICON.up}</button><button class="btn l" aria-label="Move left">${ICON.back}</button><button class="btn d" aria-label="Move forward">${ICON.down}</button><button class="btn r" aria-label="Move right">${ICON.next}</button></div><div class="hint" style="flex:1">${moved ? `Moved ${moved}.` : "Lined up with the front and left of the floor below."}</div></div>
+      <div class="row"><button class="btn swap">This one is lower down</button><button class="btn del">Remove</button></div>` : `<div class="row"><button class="btn del">Remove</button></div>`}`;
     row.querySelector(".fname").onchange = (e) => { f.name = e.target.value; draw(); buildHouse(); };
     if (i > 0) {
-      row.querySelector(".dx").onchange = (e) => { f.dx = Number(e.target.value) || 0; buildHouse(); };
-      row.querySelector(".dy").onchange = (e) => { f.dy = Number(e.target.value) || 0; buildHouse(); };
-      row.querySelector(".up").onclick = () => { remember(); [S.floors[i - 1], S.floors[i]] = [S.floors[i], S.floors[i - 1]]; S.sel = null; redetect(); };
+      const nudge = (dx, dy) => () => { remember(); f.dx = Math.round((f.dx + dx) * 100) / 100; f.dy = Math.round((f.dy + dy) * 100) / 100; panel(); buildHouse(); };
+      row.querySelector(".u").onclick = nudge(0, -0.25);
+      row.querySelector(".d").onclick = nudge(0, 0.25);
+      row.querySelector(".l").onclick = nudge(-0.25, 0);
+      row.querySelector(".r").onclick = nudge(0.25, 0);
+      row.querySelector(".swap").onclick = () => { remember(); [S.floors[i - 1], S.floors[i]] = [S.floors[i], S.floors[i - 1]]; S.sel = null; redetect(); };
     }
-    row.querySelector(".del").onclick = () => { remember(); S.floors.splice(i, 1); S.sel = null; redetect(); };
+    row.querySelector(".del").onclick = () => { remember(); S.floors.splice(i, 1); S.sel = null; redetect(); go(S.step); };
     fl.appendChild(row);
   });
-  const sel = selectedRoom(), box = $("room");
-  box.style.display = sel ? "" : "none";
-  if (sel) {
-    $("rname").value = sel.room.name;
-    $("rsize").textContent = `Found as ${((sel.box.x1 - sel.box.x0 + 1) / S.ppm).toFixed(2)} m across by ${((sel.box.y1 - sel.box.y0 + 1) / S.ppm).toFixed(2)} m down${S.ppmSet ? "" : " (scale is a guess until you set it)"}.`;
+}
+function usedNames() {
+  return S.floors.flatMap((f) => (f.out ? f.out.rooms.filter((r) => isNamed(f, r._region)).map((r) => r.name) : []));
+}
+function setName(name) {
+  const s = selectedRoom();
+  name = (name || "").trim();
+  if (!s || !name) return;
+  remember();
+  s.f.names = s.f.names.filter((n) => regionAt(s.f, n.x, n.y) !== s.region);
+  s.f.names.push({ x: S.sel.x, y: S.sel.y, name });
+  redetect();
+  if (S.step === "rooms") { pickNextUnnamed(); stepSay(); }
+}
+function pickNextUnnamed() {
+  for (let fi = 0; fi < S.floors.length; fi++) {
+    const f = S.floors[fi];
+    if (!f.out) continue;
+    const r = f.out.rooms.find((q) => !isNamed(f, q._region));
+    if (r) { S.sel = { fi, ...seedOf(f, r._region) }; if (S.floors.length > 1 && S.view !== fi) setView(fi); draw(); panel(); return true; }
   }
-  $("scale").textContent = S.ppmSet ? `Scale set: ${S.ppm.toFixed(1)} pixels per metre.` : "Scale is a guess (assuming the house is about 10 m across) until you set it.";
+  S.sel = null;
+  draw();
+  panel();
+  if (roomCount() && !S.allNamed) { S.allNamed = true; confetti(); }
+  return false;
 }
 
 // ---------- editing ----------
@@ -307,7 +489,7 @@ function remember() {
 }
 function undo() {
   const h = S.history.pop();
-  if (!h) { status("Nothing to undo."); return; }
+  if (!h) { status("There's nothing to undo."); return; }
   const v = JSON.parse(h);
   S.ppm = v.ppm;
   S.ppmSet = v.ppmSet;
@@ -319,66 +501,109 @@ function undo() {
 function floorAt(p) {
   return S.floors.findIndex((f) => p.x >= f.box.x0 && p.x <= f.box.x1 && p.y >= f.box.y0 && p.y <= f.box.y1);
 }
+// which part of the picture is on screen: one floor (zoomed in) or the whole plan
+function viewRect() {
+  const f = S.view != null ? S.floors[S.view] : null;
+  if (!f) return { x: 0, y: 0, w: S.W, h: S.H };
+  const m = Math.round(Math.max(24, (f.box.x1 - f.box.x0) * 0.05)), x = Math.max(0, f.box.x0 - m), y = Math.max(0, f.box.y0 - m);
+  return { x, y, w: Math.min(S.W, f.box.x1 + m) - x, h: Math.min(S.H, f.box.y1 + m) - y };
+}
+function setView(v) {
+  S.view = v != null && S.floors[v] ? v : null;
+  const tabs = $("tabs"), show = S.floors.length > 1 && ["size", "rooms", "doors"].includes(S.step);
+  tabs.style.display = show ? "flex" : "none";
+  tabs.innerHTML = "";
+  if (show) {
+    const add = (label, v2) => {
+      const b = document.createElement("button");
+      b.className = `btn${S.view === v2 ? " on" : ""}`;
+      b.textContent = label;
+      b.onclick = () => setView(v2);
+      tabs.appendChild(b);
+    };
+    S.floors.forEach((f, i) => add(f.name, i));
+    add("Whole plan", null);
+  }
+  draw();
+  if (S.house) preview();
+}
 function toPicture(e) {
-  const r = canvas.getBoundingClientRect();
-  return { x: ((e.clientX - r.left) / r.width) * S.W, y: ((e.clientY - r.top) / r.height) * S.H };
+  // the canvas keeps its shape inside its box, so allow for the empty margins
+  const r = canvas.getBoundingClientRect(), v = viewRect(), k = Math.min(r.width / v.w, r.height / v.h);
+  const ox = (r.width - v.w * k) / 2, oy = (r.height - v.h * k) / 2;
+  return { x: v.x + (e.clientX - r.left - ox) / k, y: v.y + (e.clientY - r.top - oy) / k };
 }
 function click(p) {
   if (S.tool === "colour") {
     const x = Math.round(p.x), y = Math.round(p.y), i = (y * S.W + x) * 4;
     S.colour = [S.rgba[i], S.rgba[i + 1], S.rgba[i + 2]];
-    setTool("select");
+    setTool("select", true);
     analyse();
+    go("check");
     return;
   }
   const fi = floorAt(p);
-  if (fi < 0) { status("Click inside one of the dashed boxes."); return; }
+  if (fi < 0) { status("Tap inside one of the dashed boxes."); return; }
   const f = S.floors[fi], region = regionAt(f, p.x, p.y), room = f.out.rooms.find((r) => r._region === region);
   if (S.tool === "select") {
-    const hit = f.out.openings.concat(hiddenOpenings(f)).find((o) => {
-      const g = o._gap, x = p.x - f.box.x0, y = p.y - f.box.y0, a = g.horizontal ? x : y, l = g.horizontal ? y : x;
-      return a >= g.a0 - 2 && a <= g.a1 + 2 && l >= g.l0 - 6 && l <= g.l1 + 6;
-    });
-    if (hit && !hit._gap.virtual) {
+    if (S.step === "doors") {
+      const reach = Math.max(8, viewRect().w / 90);
+      const hit = f.out.openings.concat(hiddenOpenings(f)).find((o) => {
+        const g = o._gap, x = p.x - f.box.x0, y = p.y - f.box.y0, a = g.horizontal ? x : y, l = g.horizontal ? y : x;
+        return !g.virtual && a >= g.a0 - 3 && a <= g.a1 + 3 && l >= g.l0 - reach && l <= g.l1 + reach;
+      });
+      if (!hit) { status("Tap one of the coloured strips on the walls."); return; }
       remember();
       const c = gapCentre(f, hit._gap), list = hit._gap.ext ? CYCLE_OUT : CYCLE_IN, next = list[(list.indexOf(hit.kind) + 1) % list.length];
       f.kinds = f.kinds.filter((q) => !near(q, c));
       f.kinds.push({ x: c.x, y: c.y, kind: next });
       redetect();
-      status(next === "none" ? "Removed. Click the same spot again to bring it back." : `Changed to: ${KIND_NAME[next]}.`);
+      if (next === "frontdoor") { stepSay(); confetti(); } else say(next === "none" ? "Gone. Tap the same spot again to bring it back." : `That's now: ${KIND[next].name.toLowerCase()}. Tap again for the next kind.`, "happy");
       return;
     }
-    S.sel = room ? { fi, ...seedOf(f, region) } : null;
+    if (S.step !== "size" && S.step !== "rooms") return;
+    if (!room) { status("Tap on one of the coloured rooms."); return; }
+    S.sel = { fi, ...seedOf(f, region) };
     draw();
     panel();
-    if (room) $("rname").focus();
+    if (S.step === "size") { say("Now type what your plan says for this room. One number is enough.", "think"); $("sw").focus({ preventScroll: true }); }
     return;
   }
-  if (!room) { status("That is not a room. Click on a coloured area."); return; }
+  if (!room) { status("That isn't a room. Tap on a coloured area."); return; }
   if (S.tool === "remove") {
     remember();
     f.deleted.push(seedOf(f, region));
     S.sel = null;
+    setTool("select", true);
     redetect();
-    status(`Removed ${room.name}.`);
+    status(`Removed ${room.name}. Press Undo if that was a mistake.`);
   } else if (S.tool === "merge") {
-    if (!S.mergeFirst || S.mergeFirst.fi !== fi) { S.mergeFirst = { fi, region, name: room.name }; status(`${room.name} picked. Now click the room to join it to.`); return; }
+    if (!S.mergeFirst || S.mergeFirst.fi !== fi) { S.mergeFirst = { fi, region }; say("Now tap the room to join it to.", "think"); return; }
     const a = S.mergeFirst.region, between = f.det.gaps.filter((g) => (g.a === a && g.b === region) || (g.b === a && g.a === region));
     S.mergeFirst = null;
-    if (a === region) { status("Pick two different rooms."); return; }
-    if (!between.length) { status("Those two rooms do not share a door or gap, so they cannot be joined.", true); return; }
+    if (a === region) { status("Tap two different rooms."); return; }
+    if (!between.length) { status("Those two rooms don't share a door or gap, so I can't join them.", true); return; }
     remember();
     for (const g of between) {
       if (g.virtual) f.virtualWalls = f.virtualWalls.filter((v) => !near({ x: (v.x0 + v.x1) / 2, y: (v.y0 + v.y1) / 2 }, gapCentre(f, g), 6));
       else f.openGaps.push(gapCentre(f, g));
     }
+    S.sel = null;
+    setTool("select", true);
     redetect();
-    status("Joined.");
+    say("Joined into one room.", "party");
   }
 }
-// openings the user has switched off, so they can be clicked back on
+// openings the user has switched off, so they can be tapped back on
 function hiddenOpenings(f) {
   return f.det.gaps.filter((g) => f.kinds.some((k) => k.kind === "none" && near(k, gapCentre(f, g)))).map((g) => ({ kind: "none", _gap: g }));
+}
+function applyScale(ppm, text) {
+  remember();
+  S.ppm = ppm;
+  S.ppmSet = true;
+  redetect();
+  say(text, "party");
 }
 function dragEnd(d) {
   const p0 = { x: d.x0, y: d.y0 }, long = Math.hypot(d.x1 - d.x0, d.y1 - d.y0);
@@ -391,19 +616,15 @@ function dragEnd(d) {
     S.floors.push(newFloor(box, S.floors.length));
     S.floors.sort((a, b) => a.box.x0 - b.box.x0 || a.box.y0 - b.box.y0);
     S.floors.forEach((f, i) => { if (/^(Ground|Upstairs|Floor \d+)$/.test(f.name)) f.name = newFloor(f.box, i).name; });
-    setTool("select");
+    setTool("select", true);
     redetect();
-    status("Floor added.");
+    go("check");
   } else if (S.tool === "measure") {
     if (long < 20) { status("Drag a longer line."); return; }
-    const m = parseFloat(window.prompt("How long is that line in metres?", ""));
-    if (!(m > 0.2)) { status("No length given, so the scale is unchanged."); return; }
-    remember();
-    S.ppm = long / m;
-    S.ppmSet = true;
-    setTool("select");
-    redetect();
-    status(`Scale set: that line is ${m} m.`);
+    pendingLine = long;
+    $("mlen").value = "";
+    $("modal").style.display = "grid";
+    $("mlen").focus();
   } else if (S.tool === "wall") {
     const fi = floorAt(p0);
     if (fi < 0 || long < 0.3 * S.ppm) { status("Drag a line across the room, inside a dashed box."); return; }
@@ -427,59 +648,93 @@ function dragEnd(d) {
       v = { x0: x, y0: ya - reach(x, ya, 0, -1), x1: x, y1: yb + reach(x, yb, 0, 1) };
     }
     S.floors[fi].virtualWalls.push(v);
+    S.sel = null;
+    setTool("select", true);
     redetect();
-    status("Wall added. The two sides stay open to each other, like an open-plan room.");
+    if (S.step === "rooms") pickNextUnnamed();
+    say("Wall added. The two sides stay open to each other, like an open-plan room.", "party");
   }
 }
-function setTool(t) {
+function setTool(t, quiet) {
   S.tool = t;
   S.mergeFirst = null;
   document.querySelectorAll("button[data-tool]").forEach((b) => b.classList.toggle("on", b.dataset.tool === t));
   canvas.style.cursor = t === "select" ? "pointer" : "crosshair";
-  if (S.source) status(TOOL_HELP[t]);
+  $("tool").style.display = t === "select" ? "none" : "flex";
+  if ((t === "box" || t === "colour") && S.view != null) setView(null);
+  if (t !== "select") {
+    $("toolName").textContent = TOOL[t][0];
+    say(TOOL[t][1], "think");
+    if (window.innerWidth <= 760) canvas.scrollIntoView({ behavior: "smooth", block: "center" });
+  } else if (!quiet) stepSay();
 }
 
 // ---------- wiring ----------
 window.addEventListener("DOMContentLoaded", () => {
   canvas = $("plan");
   ctx = canvas.getContext("2d");
+  document.querySelectorAll("[data-icon]").forEach((el) => { el.innerHTML = ICON[el.dataset.icon] || ""; if (!el.style.display) el.style.display = "inline-flex"; });
+  $("logoArt").innerHTML = roofus("happy");
+  for (const [name, icon] of STICKERS) {
+    const b = document.createElement("button");
+    b.className = "btn sticker";
+    b.innerHTML = `${ICON[icon]}<span>${name}</span>`;
+    b.onclick = () => {
+      const used = usedNames().filter((n) => n === name || n.startsWith(`${name} `)).length;
+      setName(name === "Bedroom" ? `Bedroom ${used + 1}` : used ? `${name} ${used + 1}` : name);
+    };
+    $("stickers").appendChild(b);
+  }
+  for (const k of ["window", "door", "opening", "extdoor", "frontdoor", "bifold", "garage", "none"]) {
+    $("keys").insertAdjacentHTML("beforeend", `<span class="pill"><i style="background:${KIND[k].colour}"></i>${ICON[KIND[k].icon]}${KIND[k].name}</span>`);
+  }
   $("file").onchange = (e) => e.target.files[0] && loadFile(e.target.files[0]);
+  $("drop").onclick = () => $("file").click();
   const drop = document.body;
-  drop.addEventListener("dragover", (e) => e.preventDefault());
-  drop.addEventListener("drop", (e) => { e.preventDefault(); if (e.dataTransfer.files[0]) loadFile(e.dataTransfer.files[0]); });
-  document.querySelectorAll("button[data-tool]").forEach((b) => (b.onclick = () => setTool(b.dataset.tool)));
+  drop.addEventListener("dragover", (e) => { e.preventDefault(); $("drop").classList.add("over"); });
+  drop.addEventListener("dragleave", () => $("drop").classList.remove("over"));
+  drop.addEventListener("drop", (e) => { e.preventDefault(); $("drop").classList.remove("over"); if (e.dataTransfer.files[0]) loadFile(e.dataTransfer.files[0]); });
+  $("tryExample").onclick = () => fetch("../examples/example-plan.png").then((r) => r.blob()).then(loadFile).catch(() => say("I couldn't fetch the example plan. Choose a picture of your own instead.", "oops", true));
+  document.querySelectorAll("button[data-tool]").forEach((b) => (b.onclick = () => setTool(S.tool === b.dataset.tool ? "select" : b.dataset.tool)));
+  $("toolStop").onclick = () => setTool("select");
   $("rotate").onclick = rotate;
+  $("otherPlan").onclick = () => $("file").click();
+  $("looksRight").onclick = () => go("size");
+  $("notQuite").onclick = () => { $("helper").style.display = ""; say("No problem. Show me a wall, turn the picture, or draw a box round a floor I missed.", "think"); };
   $("undo").onclick = undo;
-  $("tolerance").onchange = () => S.source && analyse();
+  $("back").onclick = () => move(-1);
+  $("next").onclick = () => move(1);
+  $("tolerance").onchange = () => { if (S.source) { analyse(); go("check"); $("helper").style.display = ""; } };
   $("title").onchange = buildHouse;
   $("lights").onchange = buildHouse;
   $("download").onclick = download;
+  $("again").onclick = () => location.reload();
   $("copy").onclick = async () => {
     const yaml = "type: custom:toon-house-card\nlayout: /local/toon-house/house.json\n";
-    try { await navigator.clipboard.writeText(yaml); status("Card settings copied. Paste them into a new card on your dashboard."); } catch (e) { status(yaml); }
+    try { await navigator.clipboard.writeText(yaml); say("Copied! Paste it into a new card on your dashboard.", "party"); } catch (e) { say(yaml, "happy"); }
   };
-  $("rname").onchange = (e) => {
-    const s = selectedRoom();
-    if (!s) return;
-    remember();
-    s.f.names = s.f.names.filter((n) => regionAt(s.f, n.x, n.y) !== s.region);
-    s.f.names.push({ x: S.sel.x, y: S.sel.y, name: e.target.value.trim() || s.room.name });
-    redetect();
-  };
+  $("rnameOk").onclick = () => setName($("rname").value);
+  $("rname").addEventListener("keydown", (e) => { if (e.key === "Enter") setName($("rname").value); });
   $("setscale").onclick = () => {
     const s = selectedRoom(), w = parseFloat($("sw").value), d = parseFloat($("sd").value);
     if (!s) return;
     const got = [];
     if (w > 0.3) got.push((s.box.x1 - s.box.x0 + 1) / w);
     if (d > 0.3) got.push((s.box.y1 - s.box.y0 + 1) / d);
-    if (!got.length) { status("Type the room's size in metres, as printed on the plan. One of the two numbers is enough.", true); return; }
-    if (got.length === 2 && Math.abs(got[0] - got[1]) / got[0] > 0.2) { status("Those two numbers do not fit this room's shape. Check them, or swap across and down.", true); return; }
-    remember();
-    S.ppm = got.reduce((a, b) => a + b, 0) / got.length;
-    S.ppmSet = true;
-    redetect();
-    status(`Scale set from ${s.room.name}. Sizes of all rooms now follow it.`);
+    if (!got.length) { status("Type the room's size in metres, as printed on your plan. One number is enough.", true); return; }
+    if (got.length === 2 && Math.abs(got[0] - got[1]) / got[0] > 0.2) { status("Those two numbers don't fit this room's shape. Check them, or swap across and down.", true); return; }
+    applyScale(got.reduce((a, b) => a + b, 0) / got.length, "Got it! Every room is the right size now. Press Next.");
   };
+  $("mok").onclick = () => {
+    const m = parseFloat($("mlen").value);
+    $("modal").style.display = "none";
+    setTool("select", true);
+    if (!(m > 0.2)) { status("No length given, so the size is unchanged."); return; }
+    applyScale(pendingLine / m, `Got it! That line is ${m} m. Press Next.`);
+  };
+  $("mcancel").onclick = () => { $("modal").style.display = "none"; setTool("select"); };
+  $("mlen").addEventListener("keydown", (e) => { if (e.key === "Enter") $("mok").click(); });
+  $("previewToggle").onclick = () => { document.body.classList.toggle("peek"); setTimeout(fitPreview, 50); };
   canvas.addEventListener("pointerdown", (e) => {
     if (!S.source) return;
     const p = toPicture(e);
@@ -501,9 +756,19 @@ window.addEventListener("DOMContentLoaded", () => {
     S.down = null;
     if (d) { dragEnd(d); draw(); } else click(toPicture(e));
   });
-  setTool("select");
+  // the "?" badges on unnamed rooms gently pulse
+  setInterval(() => { if (S.source && S.step === "rooms" && !S.drag && !matchMedia("(prefers-reduced-motion:reduce)").matches) draw(); }, 130);
+  go("plan");
   // lets the test (or a curious user) load a picture from an address: ?plan=...
   const q = new URLSearchParams(location.search).get("plan");
   if (q) fetch(q).then((r) => r.blob()).then(loadFile);
   window.importer = S;
+  window.importerGo = go;
+  // for tests: where a point of the picture is on screen right now (null if that part is not in view)
+  window.importerPoint = (x, y) => {
+    const r = canvas.getBoundingClientRect(), v = viewRect(), k = Math.min(r.width / v.w, r.height / v.h);
+    if (x < v.x || y < v.y || x > v.x + v.w || y > v.y + v.h) return null;
+    return { x: r.left + (r.width - v.w * k) / 2 + (x - v.x) * k, y: r.top + (r.height - v.h * k) / 2 + (y - v.y) * k };
+  };
+  window.importerView = setView;
 });

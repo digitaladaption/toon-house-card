@@ -10,7 +10,7 @@ import { floorWalls, faceWithCutouts, bbox, roomPoints, uncovered, EXT_WALL } fr
 import { resolveTheme, roomStyle, drawPattern, PATTERN_SIZE } from "./theme.js";
 import { furnitureParts } from "./furniture.js";
 
-const VERSION = "0.2.0";
+const VERSION = "0.3.0";
 const SILL = 0.9, HEAD = 2.1, DOOR_HEAD = 2.05, GAP = 0.2;
 const tex = (pattern, a, b) => `tex|${pattern}|${a}|${b || ""}`;
 const esc = (s) => String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/"/g, "&quot;");
@@ -64,6 +64,8 @@ class ToonHouseCard extends HTMLElement {
   }
   setConfig(config) {
     if (!config || !config.layout) throw new Error('Set "layout" to the address of your house file (for example /local/toon-house/house.json) or put the house in the card config.');
+    // asking for a different opening view moves to it, even after the card has been used
+    if (this._config && config.view !== undefined && this._config.view !== config.view) this._mode = null;
     this._config = { view: "outside", cut_height: 1.2, ...config };
     if (!this.shadowRoot) {
       this.attachShadow({ mode: "open" });
@@ -98,7 +100,7 @@ class ToonHouseCard extends HTMLElement {
     this.shadowRoot.innerHTML = `<style>
       :host{display:block}
       ha-card{position:relative;overflow:hidden;font-family:"Trebuchet MS","Segoe UI",system-ui,sans-serif;color:#1b1b1b}
-      .wrap{position:relative;height:var(--toon-house-h,calc(100vh - 60px));min-height:380px}
+      .wrap{position:relative;height:var(--toon-house-h,calc(100vh - 60px));min-height:var(--toon-house-min-h,380px)}
       canvas{display:block;width:100%;height:100%;touch-action:none;outline:none}
       .bar{position:absolute;left:12px;top:10px;right:12px;display:flex;gap:8px;flex-wrap:wrap;align-items:center;pointer-events:none}
       h1{margin:0 8px 0 0;font-size:22px;font-weight:900;text-shadow:0 0 4px #fff,0 0 4px #fff}

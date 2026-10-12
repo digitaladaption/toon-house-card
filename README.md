@@ -84,7 +84,7 @@ layout: /local/toon-house/house.json
 
 ![The importer](docs/img/importer.png)
 
-You set the scale from one room size, name the rooms, fix anything it got wrong and download `house.json`. It works best on plans with solid walls, like most estate agent plans. See **[docs/importer.md](docs/importer.md)**.
+A little house called Roofus walks you through it: set the size from one room, name the rooms with stickers, mark the front door and save `house.json`. It works on phones and tablets, and children can do it. It works best on plans with solid walls, like most estate agent plans. See **[docs/importer.md](docs/importer.md)**.
 
 ## How to describe your house
 

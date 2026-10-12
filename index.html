@@ -4,22 +4,33 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Toon House Card</title>
+<link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="assets/toon.css">
 <style>
-  body{margin:0;min-height:100vh;display:grid;place-items:center;background:#6CCBFA;font-family:"Trebuchet MS","Segoe UI",system-ui,sans-serif;color:#1b1b1b}
-  main{background:#FFFDF4;border:3px solid #1b1b1b;border-radius:16px;box-shadow:4px 5px 0 #1b1b1b;padding:24px 28px;max-width:520px;margin:16px}
-  h1{margin:0 0 8px;font-size:28px}
-  p{font-size:16px;line-height:1.5}
-  a.btn{display:block;margin:10px 0;padding:12px 16px;border:3px solid #1b1b1b;border-radius:12px;background:#FFD83A;color:#1b1b1b;font-weight:800;text-decoration:none;box-shadow:2px 3px 0 #1b1b1b}
-  a.plain{background:#fff}
+  body{display:grid;place-items:center;min-height:100vh;padding:16px}
+  main{padding:22px 26px;max-width:560px;width:100%;text-align:center}
+  #art{width:150px;margin:0 auto 4px;animation:bob 3s ease-in-out infinite}
+  @keyframes bob{50%{transform:translateY(-6px) rotate(-2deg)}}
+  h1{font-size:34px}
+  p{font-size:18px;line-height:1.45;margin:8px 0 16px}
+  .btn{display:flex;margin:10px 0}
+  img{width:100%;border:3px solid var(--ink);border-radius:16px;margin:6px 0 4px;display:block}
+  @media (prefers-reduced-motion:reduce){#art{animation:none}}
 </style>
 </head>
-<body>
-<main>
+<body class="toon">
+<main class="panel">
+  <div id="art"></div>
   <h1>Toon House Card</h1>
-  <p>A cartoon 3D dollhouse of your home for Home Assistant.</p>
-  <a class="btn" href="importer/">Turn a floor plan picture into a house</a>
-  <a class="btn plain" href="demo/">See the example house</a>
-  <a class="btn plain" href="https://github.com/digitaladaption/toon-house-card">Install guide and source on GitHub</a>
+  <p>Your home as a cartoon 3D house for Home Assistant. Tap the lights, watch the blinds move.</p>
+  <a class="btn big go" href="importer/">Build my house from a floor plan</a>
+  <a class="btn" href="demo/">Play with the example house</a>
+  <a class="btn" href="https://github.com/digitaladaption/toon-house-card">How to install it</a>
+  <img src="docs/img/outside.png" alt="A cartoon 3D house with a red roof, garden and drive">
 </main>
+<script type="module">
+  import { roofus } from "./src/importer/art.js";
+  document.getElementById("art").innerHTML = roofus("party");
+</script>
 </body>
 </html>

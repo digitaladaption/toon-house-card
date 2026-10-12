@@ -1,0 +1,30 @@
+/* Shared cartoon look for the importer, demo and landing pages. */
+@font-face{font-family:"Fredoka";src:url("fonts/fredoka-latin-500-normal.woff2") format("woff2");font-weight:500;font-display:swap}
+@font-face{font-family:"Fredoka";src:url("fonts/fredoka-latin-700-normal.woff2") format("woff2");font-weight:700;font-display:swap}
+:root{
+  --ink:#1b1b1b;--sky:#6CCBFA;--sky2:#9ADCFC;--sun:#FFD83A;--sun2:#FFB703;--paper:#FFFDF4;--grass:#62CE3C;--grass2:#4FB52E;
+  --peach:#F9B58B;--roof:#C4513A;--door:#7A4FC4;--pink:#F78FB3;--mint:#7FD8BE;--lilac:#C9B6FF;--bad:#FF9F8A;--white:#fff;
+  --r:18px;--line:3px;--drop:3px 4px 0 var(--ink);
+}
+*{box-sizing:border-box}
+html,body{margin:0;min-height:100%}
+body.toon{font-family:"Fredoka",ui-rounded,"Arial Rounded MT Bold","Trebuchet MS",system-ui,sans-serif;font-weight:500;color:var(--ink);background:linear-gradient(var(--sky),var(--sky2));background-attachment:fixed;-webkit-tap-highlight-color:transparent}
+/* drifting clouds behind everything */
+body.toon::before{content:"";position:fixed;inset:0 -900px 0 0;z-index:-1;pointer-events:none;opacity:.75;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='900' height='620' viewBox='0 0 900 620'%3E%3Cg fill='%23fff' stroke='%231b1b1b' stroke-width='3'%3E%3Cpath d='M90 120a30 30 0 0 1 55-17 36 36 0 0 1 66 8 27 27 0 0 1 8 53H93a23 23 0 0 1-3-44z'/%3E%3Cpath d='M560 330a22 22 0 0 1 40-12 26 26 0 0 1 48 6 20 20 0 0 1 6 39h-92a17 17 0 0 1-2-33z'/%3E%3Cpath d='M300 520a16 16 0 0 1 29-9 19 19 0 0 1 35 4 15 15 0 0 1 4 29h-66a12 12 0 0 1-2-24z'/%3E%3C/g%3E%3C/svg%3E");
+  animation:drift 140s linear infinite}
+@keyframes drift{to{transform:translateX(-900px)}}
+h1,h2,h3{font-weight:700;margin:0}
+.panel{background:var(--paper);border:var(--line) solid var(--ink);border-radius:var(--r);box-shadow:var(--drop)}
+.btn{font:inherit;font-weight:700;font-size:16px;min-height:44px;padding:8px 14px;border:var(--line) solid var(--ink);border-radius:14px;background:var(--white);color:var(--ink);cursor:pointer;box-shadow:2px 3px 0 var(--ink);display:inline-flex;align-items:center;justify-content:center;gap:8px;text-decoration:none;transition:transform .08s,box-shadow .08s;user-select:none}
+.btn:hover{transform:translate(-1px,-1px) rotate(-1deg);box-shadow:3px 4px 0 var(--ink)}
+.btn:active{transform:translate(2px,3px);box-shadow:0 0 0 var(--ink)}
+.btn.on,.btn.go{background:var(--sun)}
+.btn.big{font-size:20px;min-height:56px;padding:10px 22px;border-radius:18px}
+.btn.ghost{background:transparent;box-shadow:none;border-style:dashed}
+.btn[disabled]{opacity:.45;cursor:default;transform:none;box-shadow:2px 3px 0 var(--ink)}
+.btn svg{width:26px;height:26px;flex:none}
+input.toon,select.toon{font:inherit;font-size:17px;min-height:44px;padding:6px 12px;border:var(--line) solid var(--ink);border-radius:12px;background:var(--white);color:var(--ink);min-width:0}
+input.toon:focus,.btn:focus-visible{outline:4px solid var(--door);outline-offset:2px}
+.toast{position:fixed;left:50%;bottom:90px;transform:translateX(-50%);z-index:50;max-width:min(92vw,520px);padding:12px 18px;background:var(--white);border:var(--line) solid var(--ink);border-radius:16px;box-shadow:var(--drop);font-weight:700;display:none}
+@media (prefers-reduced-motion:reduce){body.toon::before{animation:none}.btn{transition:none}.btn:hover{transform:none}}

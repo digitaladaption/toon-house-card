@@ -4,21 +4,28 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Toon House Card demo</title>
+<link rel="icon" href="../assets/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="../assets/toon.css">
 <style>
-  html,body{margin:0;height:100%;font-family:"Trebuchet MS","Segoe UI",system-ui,sans-serif;background:#222}
-  #panel{position:fixed;right:10px;bottom:10px;z-index:5;background:#fff;border:3px solid #1b1b1b;border-radius:12px;padding:8px 12px;font-size:13px;font-weight:700;display:flex;gap:10px;align-items:center;flex-wrap:wrap;max-width:92vw}
-  #panel button{font:inherit;font-weight:800;border:2px solid #1b1b1b;border-radius:8px;background:#FFD83A;padding:4px 8px;cursor:pointer}
+  html,body{height:100%;overflow:hidden}
+  #host{height:100%}
+  #panel{position:fixed;left:50%;bottom:12px;transform:translateX(-50%);z-index:5;padding:8px 12px;display:flex;gap:8px;align-items:center;flex-wrap:wrap;justify-content:center;width:max-content;max-width:calc(100vw - 16px)}
+  #panel .btn{min-height:44px;font-size:15px;padding:6px 12px}
+  #panel label{display:flex;gap:6px;align-items:center;font-weight:700;font-size:15px}
+  #home{position:fixed;right:12px;top:12px;z-index:5}
+  @media (max-width:600px){#panel .btn span.t{display:none}#home{top:auto;bottom:86px}}
 </style>
 </head>
-<body>
+<body class="toon">
 <div id="host"></div>
-<div id="panel">
-  <span>Demo controls</span>
-  <button id="lights">Lights on/off</button>
-  <label>Shutters <input id="cover" type="range" min="0" max="100" value="40"></label>
-  <button id="heat">Heating on/off</button>
-  <button id="theme">Theme</button>
+<a id="home" class="btn" href="../importer/">Build your own</a>
+<div id="panel" class="panel">
+  <button class="btn on" id="lights">Lights</button>
+  <label>Blinds <input id="cover" type="range" min="0" max="100" value="40" aria-label="Blind position"></label>
+  <button class="btn on" id="heat">Heating</button>
+  <button class="btn" id="theme">Brick look</button>
 </div>
+<div id="toast" class="toast"></div>
 <script type="module">
   // A stand-in for Home Assistant, so the card can be tried in any browser.
   import "../dist/toon-house-card.js";
@@ -43,17 +50,26 @@
       states[d.entity] = s;
     }
   }
-  let card;
+  let card, toastTimer;
+  function toast(text) {
+    const t = document.getElementById("toast");
+    t.textContent = text;
+    t.style.display = "block";
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => { t.style.display = "none"; }, 3500);
+  }
   function push() {
     fill();
-    card.hass = { states: { ...states }, callService: (domain, service, data) => { if (service === "toggle") { lights = !lights; push(); } } };
+    document.getElementById("lights").classList.toggle("on", lights);
+    document.getElementById("heat").classList.toggle("on", heat);
+    card.hass = { states: { ...states }, callService: (domain, service) => { if (service === "toggle") { lights = !lights; push(); } } };
   }
   function make() {
     if (card) card.remove();
     card = document.createElement("toon-house-card");
     card.setConfig({ layout: url, height: "100vh", view: q.get("view") || "outside", ...(theme ? { theme } : {}) });
     document.getElementById("host").appendChild(card);
-    card.addEventListener("hass-more-info", (e) => alert(`Home Assistant would open the details for ${e.detail.entityId}`));
+    card.addEventListener("hass-more-info", (e) => toast(`In Home Assistant this opens the controls for ${e.detail.entityId}.`));
     push();
     window.card = card;
   }
@@ -61,8 +77,8 @@
   document.getElementById("lights").onclick = () => { lights = !lights; push(); };
   document.getElementById("heat").onclick = () => { heat = !heat; push(); };
   document.getElementById("cover").oninput = (e) => { cover = Number(e.target.value); push(); };
-  document.getElementById("theme").onclick = () => { theme = theme === "brick" ? "toon" : "brick"; make(); };
-  if (q.has("clean")) document.getElementById("panel").style.display = "none";
+  document.getElementById("theme").onclick = (e) => { theme = theme === "brick" ? "toon" : "brick"; e.target.textContent = theme === "brick" ? "Cartoon look" : "Brick look"; make(); };
+  if (q.has("clean")) { document.getElementById("panel").style.display = "none"; document.getElementById("home").style.display = "none"; }
 </script>
 </body>
 </html>

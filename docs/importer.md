@@ -2,7 +2,7 @@
 
 The importer turns a picture of a floor plan into a house file. It runs in your browser: the picture is never uploaded anywhere.
 
-![The importer with the example plan](img/importer.png)
+![Naming the rooms in the importer](img/importer.png)
 
 ## Open it
 
@@ -18,18 +18,19 @@ Then open `http://localhost:8000/importer/`. To try it straight away, use [`exam
 
 ## Steps
 
-1. **Choose your plan.** A JPG, PNG or WebP. For a PDF, take a screenshot. The front of the house should be at the bottom; use **Turn a quarter** if it is not.
-2. **Check the rooms.** Each room it found is tinted. If nothing is tinted, press **Pick wall colour** and click on a wall.
-3. **Set the scale.** Click a room, type its size as printed on the plan, press **Set scale**. One number is enough. Or press **Measure for scale** and drag along a length you know.
-4. **Name the rooms.** Click a room and type its name. The name sets its colours: a kitchen gets a checked floor, a bathroom gets tiles.
-5. **Fix what it got wrong.**
-   - **Add a wall**: drag a line where one room should be two. The two sides stay open to each other.
-   - **Join two rooms**: click two rooms that should be one.
-   - **Remove a room**: click an area that is not a room.
-   - **Mark a floor**: drag a box round a floor it missed or cut short.
-   - Click a door or window to change what it is. Click the front door until it turns purple.
-6. **Line up the floors.** Upper floors are lined up with the front and left of the ground floor. Use the shift boxes if yours sits differently.
-7. **Download house.json**, put it in `config/www/toon-house/` and point the card at `/local/toon-house/house.json`.
+Roofus, the little house in the corner, tells you what to do at each step. Use **Next** and **Back** at the bottom, or tap a numbered step at the top. **Undo** takes back the last change.
+
+1. **Pick your plan.** Choose a JPG, PNG or WebP, or press **Try the example plan**. For a PDF, take a screenshot.
+2. **Check the rooms.** Each room it found is coloured in. If that looks wrong, press **Not quite**: you can show it a wall, turn the picture so the front is at the bottom, or draw a box round a floor it missed.
+3. **Set the size.** Tap a room and type its size as printed on the plan. One number is enough. Or press **Measure a line instead** and drag along a length you know.
+4. **Name the rooms.** Tap a room and pick its sticker, or type a name. The name sets its colours: a kitchen gets a checked floor, a bathroom gets tiles. Under **Something looks wrong?** you can add a wall to split a room, join two rooms, or remove something that is not a room.
+5. **Doors and windows.** Tap a coloured strip to change what it is. Tap your front door until it turns purple.
+6. **Stack the floors.** If there is an upstairs, check it sits in the right place and nudge it with the arrows.
+7. **Save.** Press **Save my house** to download `house.json`, put it in `config/www/toon-house/` and point the card at `/local/toon-house/house.json`.
+
+The 3D house updates as you go. On a phone it is the small picture in the bar at the bottom: tap it to look.
+
+![The importer on a phone](img/importer-phone.png)
 
 Then add your devices to the file by hand: see [the house file guide](house-file.md#devices).
 
