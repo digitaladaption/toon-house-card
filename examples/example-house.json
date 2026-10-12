@@ -1,0 +1,134 @@
+{
+  "title": "Example House",
+  "theme": "toon",
+  "storey_height": 2.4,
+  "floors": [
+    {
+      "id": "ground",
+      "name": "Ground",
+      "rooms": [
+        { "id": "living", "name": "Living room", "rect": [0, 0, 5, 4.5] },
+        { "id": "kitchen", "name": "Kitchen", "rect": [5, 0, 10, 4.5] },
+        { "id": "office", "name": "Office", "rect": [0, 4.5, 2.2, 8] },
+        { "id": "stairs", "name": "Stairs", "rect": [2.2, 4.5, 3.2, 8] },
+        { "id": "hall", "name": "Hall", "rect": [3.2, 4.5, 5.2, 8] },
+        { "id": "utility", "name": "Utility", "rect": [5.2, 4.5, 6.6, 6.3] },
+        { "id": "wc", "name": "WC", "rect": [5.2, 6.3, 6.6, 8] },
+        { "id": "garage", "name": "Garage", "rect": [6.6, 4.5, 10, 10] }
+      ],
+      "openings": [
+        { "room": "hall", "wall": "s", "at": 3.7, "width": 1.0, "kind": "frontdoor", "name": "Front door" },
+        { "room": "living", "wall": "n", "at": 1.5, "width": 2.0, "kind": "window", "name": "Living room window" },
+        { "room": "living", "wall": "w", "at": 1.4, "width": 1.6, "kind": "window" },
+        { "room": "kitchen", "wall": "n", "at": 6.0, "width": 3.0, "kind": "bifold", "name": "Patio doors" },
+        { "room": "kitchen", "wall": "e", "at": 1.4, "width": 1.4, "kind": "window" },
+        { "room": "office", "wall": "s", "at": 0.4, "width": 1.4, "kind": "window" },
+        { "room": "wc", "wall": "s", "at": 5.6, "width": 0.6, "kind": "window" },
+        { "room": "garage", "wall": "s", "at": 7.1, "width": 2.4, "kind": "garage", "name": "Garage door" },
+        { "room": "living", "wall": "e", "at": 1.2, "width": 2.0, "kind": "opening" },
+        { "room": "hall", "wall": "n", "at": 3.6, "width": 0.85, "kind": "door" },
+        { "room": "office", "wall": "n", "at": 0.7, "width": 0.8, "kind": "door" },
+        { "room": "hall", "wall": "e", "at": 5.0, "width": 0.8, "kind": "door" },
+        { "room": "hall", "wall": "e", "at": 6.8, "width": 0.75, "kind": "door" },
+        { "room": "utility", "wall": "e", "at": 5.0, "width": 0.8, "kind": "door" }
+      ],
+      "furniture": [
+        { "type": "sofa", "x": 2.4, "y": 3.6, "rot": 180 },
+        { "type": "rug", "x": 2.4, "y": 2.3 },
+        { "type": "coffee_table", "x": 2.4, "y": 2.3 },
+        { "type": "tv_board", "x": 4.3, "y": 0.35, "w": 1.2 },
+        { "type": "armchair", "x": 0.7, "y": 3.6, "rot": 180 },
+        { "type": "plant", "x": 0.45, "y": 0.45 },
+        { "type": "kitchen", "x": 8.6, "y": 0.33, "w": 1.2 },
+        { "type": "stove", "x": 9.66, "y": 2.2, "rot": 90 },
+        { "type": "sink", "x": 9.66, "y": 3.2, "rot": 90 },
+        { "type": "fridge", "x": 9.62, "y": 4.1, "rot": 90 },
+        { "type": "table", "x": 6.7, "y": 2.7 },
+        { "type": "chair", "x": 6.2, "y": 2.0 },
+        { "type": "chair", "x": 7.2, "y": 2.0 },
+        { "type": "chair", "x": 6.2, "y": 3.4, "rot": 180 },
+        { "type": "chair", "x": 7.2, "y": 3.4, "rot": 180 },
+        { "type": "desk", "x": 1.1, "y": 5.0 },
+        { "type": "chair", "x": 1.1, "y": 5.6, "rot": 180 },
+        { "type": "shelf", "x": 0.22, "y": 6.6, "rot": 90 },
+        { "type": "washer", "x": 5.6, "y": 4.85 },
+        { "type": "wc", "x": 6.2, "y": 6.7 },
+        { "type": "washbasin", "x": 6.3, "y": 7.6, "rot": 180 },
+        { "type": "car", "x": 8.3, "y": 7.4, "colour": "#E8483F" }
+      ],
+      "devices": [
+        { "name": "Living room light", "kind": "light", "x": 2.4, "y": 2.3, "entity": "light.living_room" },
+        { "name": "Living room blind", "kind": "cover", "room": "living", "wall": "n", "at": 2.5, "entity": "cover.living_room_blind" },
+        { "name": "Living room radiator", "kind": "climate", "room": "living", "wall": "w", "at": 3.6, "entity": "climate.living_room" },
+        { "name": "Television", "kind": "tv", "x": 4.3, "y": 0.35, "entity": "media_player.living_room_tv" },
+        { "name": "Kitchen light", "kind": "light", "x": 7.6, "y": 1.2, "entity": "light.kitchen" },
+        { "name": "Kitchen motion", "kind": "motion", "x": 5.5, "y": 4.0, "entity": "binary_sensor.kitchen_motion" },
+        { "name": "Patio door sensor", "kind": "contact", "room": "kitchen", "wall": "n", "at": 6.3, "entity": null },
+        { "name": "Hall light", "kind": "light", "x": 4.2, "y": 6.2, "entity": "light.hall" },
+        { "name": "Front door lock", "kind": "lock", "x": 4.55, "y": 7.7, "entity": "lock.front_door" },
+        { "name": "Doorbell camera", "kind": "camera", "x": 3.4, "y": 8.45, "entity": "camera.front_door" },
+        { "name": "Garage door", "kind": "cover", "room": "garage", "wall": "s", "at": 8.3, "entity": "cover.garage_door" },
+        { "name": "Office light", "kind": "light", "x": 1.1, "y": 6.6, "entity": null },
+        { "name": "Kitchen speaker", "kind": "speaker", "x": 5.4, "y": 0.4, "entity": null }
+      ]
+    },
+    {
+      "id": "first",
+      "name": "Upstairs",
+      "rooms": [
+        { "id": "bed1", "name": "Main bedroom", "rect": [0, 0, 4.6, 4.2] },
+        { "id": "bath", "name": "Bathroom", "rect": [4.6, 0, 7, 2.8] },
+        { "id": "bed2", "name": "Bedroom 2", "rect": [7, 0, 10, 4.2] },
+        { "id": "landing", "name": "Landing", "points": [[4.6, 2.8], [7, 2.8], [7, 5.6], [2.2, 5.6], [2.2, 4.2], [4.6, 4.2]], "label": [4.6, 4.9] },
+        { "id": "dressing", "name": "Dressing room", "rect": [0, 4.2, 2.2, 8] },
+        { "id": "stairwell", "name": "Stairs", "rect": [2.2, 5.6, 3.2, 8] },
+        { "id": "bed4", "name": "Nursery", "rect": [3.2, 5.6, 7, 8] },
+        { "id": "bed3", "name": "Bedroom 3", "rect": [7, 4.2, 10, 8] }
+      ],
+      "openings": [
+        { "room": "bed1", "wall": "n", "at": 1.3, "width": 2.0, "kind": "window" },
+        { "room": "bed1", "wall": "w", "at": 1.4, "width": 1.4, "kind": "window" },
+        { "room": "bath", "wall": "n", "at": 5.3, "width": 0.9, "kind": "window" },
+        { "room": "bed2", "wall": "n", "at": 7.8, "width": 1.5, "kind": "window" },
+        { "room": "bed3", "wall": "s", "at": 7.8, "width": 1.5, "kind": "window" },
+        { "room": "bed4", "wall": "s", "at": 4.2, "width": 1.8, "kind": "window" },
+        { "room": "dressing", "wall": "s", "at": 0.5, "width": 1.2, "kind": "window" },
+        { "room": "bed1", "wall": "s", "at": 3.4, "width": 0.8, "kind": "door" },
+        { "room": "bath", "wall": "s", "at": 5.4, "width": 0.75, "kind": "door" },
+        { "room": "bed2", "wall": "w", "at": 3.2, "width": 0.8, "kind": "door" },
+        { "room": "bed3", "wall": "w", "at": 4.6, "width": 0.8, "kind": "door" },
+        { "room": "bed4", "wall": "n", "at": 5.2, "width": 0.8, "kind": "door" },
+        { "room": "dressing", "wall": "e", "at": 4.5, "width": 0.8, "kind": "door" }
+      ],
+      "furniture": [
+        { "type": "bed", "x": 2.3, "y": 1.2 },
+        { "type": "bedside", "x": 1.1, "y": 0.3 },
+        { "type": "bedside", "x": 3.5, "y": 0.3 },
+        { "type": "wardrobe", "x": 0.32, "y": 3.2, "rot": 90, "w": 1.6 },
+        { "type": "bathtub", "x": 5.6, "y": 0.45 },
+        { "type": "wc", "x": 6.7, "y": 1.5, "rot": 90 },
+        { "type": "washbasin", "x": 6.72, "y": 2.3, "rot": 90 },
+        { "type": "single_bed", "x": 9.4, "y": 1.2 },
+        { "type": "desk", "x": 7.7, "y": 3.8, "w": 1.1 },
+        { "type": "single_bed", "x": 9.4, "y": 6.8 },
+        { "type": "shelf", "x": 7.25, "y": 7.2, "rot": 90 },
+        { "type": "single_bed", "x": 3.8, "y": 6.8 },
+        { "type": "rug", "x": 5.5, "y": 6.8, "w": 1.5, "d": 1.2 },
+        { "type": "wardrobe", "x": 1.1, "y": 4.55, "w": 1.8 },
+        { "type": "plant", "x": 6.6, "y": 5.2 }
+      ],
+      "devices": [
+        { "name": "Main bedroom light", "kind": "light", "x": 2.3, "y": 2.8, "entity": "light.main_bedroom" },
+        { "name": "Main bedroom radiator", "kind": "climate", "room": "bed1", "wall": "w", "at": 3.3, "entity": null },
+        { "name": "Landing light", "kind": "light", "x": 5.8, "y": 4.2, "entity": "light.landing" },
+        { "name": "Nursery blind", "kind": "cover", "room": "bed4", "wall": "s", "at": 5.0, "entity": null },
+        { "name": "Bathroom sensor", "kind": "sensor", "x": 6.6, "y": 0.4, "entity": null }
+      ]
+    }
+  ],
+  "chimneys": [{ "x": 1.2, "y": 4.0 }],
+  "outside": {
+    "patio": [5.4, -3.2, 10, -0.3],
+    "hedge": ["e"]
+  }
+}

@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Toon House Card demo</title>
+<style>
+  html,body{margin:0;height:100%;font-family:"Trebuchet MS","Segoe UI",system-ui,sans-serif;background:#222}
+  #panel{position:fixed;right:10px;bottom:10px;z-index:5;background:#fff;border:3px solid #1b1b1b;border-radius:12px;padding:8px 12px;font-size:13px;font-weight:700;display:flex;gap:10px;align-items:center;flex-wrap:wrap;max-width:92vw}
+  #panel button{font:inherit;font-weight:800;border:2px solid #1b1b1b;border-radius:8px;background:#FFD83A;padding:4px 8px;cursor:pointer}
+</style>
+</head>
+<body>
+<div id="host"></div>
+<div id="panel">
+  <span>Demo controls</span>
+  <button id="lights">Lights on/off</button>
+  <label>Shutters <input id="cover" type="range" min="0" max="100" value="40"></label>
+  <button id="heat">Heating on/off</button>
+  <button id="theme">Theme</button>
+</div>
+<script type="module">
+  // A stand-in for Home Assistant, so the card can be tried in any browser.
+  import "../dist/toon-house-card.js";
+  const q = new URLSearchParams(location.search);
+  const url = q.get("layout") || "../examples/example-house.json";
+  let theme = q.get("theme") || "";
+  let layout = { floors: [] };
+  try { layout = await (await fetch(url)).json(); } catch (e) { /* the card shows the problem */ }
+  const states = {};
+  let lights = true, heat = true, cover = 40;
+  const devices = (layout.floors || []).flatMap((f) => f.devices || []).filter((d) => d.entity);
+  function fill() {
+    for (const d of devices) {
+      const s = { entity_id: d.entity, state: "on", attributes: {} };
+      if (d.kind === "light" || d.kind === "switch") s.state = lights ? "on" : "off";
+      else if (d.kind === "cover") { s.state = cover > 0 ? "open" : "closed"; s.attributes.current_position = cover; }
+      else if (d.kind === "climate") { s.state = "heat"; s.attributes = { current_temperature: 20.5, hvac_action: heat ? "heating" : "idle" }; }
+      else if (d.kind === "lock") s.state = "locked";
+      else if (d.kind === "contact" || d.kind === "motion") s.state = "off";
+      else if (d.kind === "camera") s.state = "idle";
+      else if (d.kind === "speaker" || d.kind === "tv") s.state = lights ? "playing" : "off";
+      states[d.entity] = s;
+    }
+  }
+  let card;
+  function push() {
+    fill();
+    card.hass = { states: { ...states }, callService: (domain, service, data) => { if (service === "toggle") { lights = !lights; push(); } } };
+  }
+  function make() {
+    if (card) card.remove();
+    card = document.createElement("toon-house-card");
+    card.setConfig({ layout: url, height: "100vh", view: q.get("view") || "outside", ...(theme ? { theme } : {}) });
+    document.getElementById("host").appendChild(card);
+    card.addEventListener("hass-more-info", (e) => alert(`Home Assistant would open the details for ${e.detail.entityId}`));
+    push();
+    window.card = card;
+  }
+  make();
+  document.getElementById("lights").onclick = () => { lights = !lights; push(); };
+  document.getElementById("heat").onclick = () => { heat = !heat; push(); };
+  document.getElementById("cover").oninput = (e) => { cover = Number(e.target.value); push(); };
+  document.getElementById("theme").onclick = () => { theme = theme === "brick" ? "toon" : "brick"; make(); };
+  if (q.has("clean")) document.getElementById("panel").style.display = "none";
+</script>
+</body>
+</html>

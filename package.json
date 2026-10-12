@@ -1,0 +1,19 @@
+{
+  "name": "toon-house-card",
+  "version": "0.1.0",
+  "description": "A cartoon 3D dollhouse of your home for Home Assistant, built from a simple floor plan file",
+  "license": "MIT",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "esbuild src/card.js --bundle --format=esm --minify --target=es2020 --outfile=dist/toon-house-card.js",
+    "watch": "esbuild src/card.js --bundle --format=esm --target=es2020 --outfile=dist/toon-house-card.js --watch",
+    "test": "node test/geometry.test.mjs",
+    "demo": "python3 -m http.server 8000"
+  },
+  "devDependencies": {
+    "clipper-lib": "6.4.2",
+    "esbuild": "0.24.0",
+    "three": "0.186.1"
+  }
+}
