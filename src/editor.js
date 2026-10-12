@@ -1,19 +1,16 @@
-/* The card's editor inside Home Assistant: pick the house, the look, and connect each light,
-   blind and radiator to a real device. Links are saved in the card's own settings ("entities"),
-   so they work whether the house is in a file or written into the card. */
+/* The card's editor inside Home Assistant: pick the house, the look, put things on the plan and
+   connect each light, blind and radiator to a real device (in the setup window, setup.js).
+   Links are saved in the card's own settings ("entities"), so they work whether the house is in
+   a file or written into the card. */
 import { roofus, ICON } from "./art.js";
 import { applyOverlay, slug } from "./layout.js";
 import { floorWalls, roomPoints, bbox } from "./geometry.js";
 import { ensureFont, FONT } from "./font.js";
 import { THEMES, resolveTheme, roomStyle } from "./theme.js";
+import { stateText } from "./match.js";
+import { Setup, SETUP_STYLE } from "./setup.js";
 
 const IMPORTER = "https://digitaladaption.github.io/toon-house-card/importer/";
-// which kinds of Home Assistant entity suit each kind of device
-const DOMAINS = {
-  light: ["light", "switch", "input_boolean"], switch: ["switch", "input_boolean", "light", "fan"], cover: ["cover", "input_number"],
-  climate: ["climate", "sensor", "input_number"], lock: ["lock"], motion: ["binary_sensor"], contact: ["binary_sensor"],
-  camera: ["camera"], speaker: ["media_player"], tv: ["media_player"], sensor: ["sensor", "binary_sensor"],
-};
 const KIND_NAME = { light: "Light", switch: "Switch", cover: "Blind or shutter", climate: "Heating", lock: "Lock", motion: "Motion sensor", contact: "Door or window sensor", camera: "Camera", speaker: "Speaker", tv: "TV", sensor: "Sensor" };
 // what can be added from the editor, and the words Roofus uses for each
 const ADD = [["light", "Light", "Tap where the light goes."], ["cover", "Blind", "Tap the window it covers."], ["climate", "Radiator", "Tap by the wall it is on. Away from a wall makes a thermostat."], ["lock", "Lock", "Tap the door it is on."], ["motion", "Motion sensor", "Tap where the sensor is."], ["contact", "Door sensor", "Tap the door or window it is on."], ["camera", "Camera", "Tap where the camera is. It can be outside."], ["speaker", "Speaker", "Tap where the speaker is."], ["tv", "TV", "Tap where the TV is."], ["sensor", "Sensor", "Tap where the sensor is."], ["switch", "Switch", "Tap where the switch is."]];
@@ -41,7 +38,7 @@ const STYLE = `
   .btn.on{background:var(--sun)}
   .btn svg{width:24px;height:24px;flex:none}
   @media (hover:hover){.btn:hover{transform:translate(-1px,-1px) rotate(-1deg)}}
-  input[type=text],input[type=number],input:not([type]){font:inherit;font-size:16px;min-height:44px;padding:6px 10px;border:3px solid var(--ink);border-radius:12px;background:#fff;color:var(--ink);min-width:0;width:100%}
+  input[type=text],input[type=number],input[type=search],input:not([type]){font:inherit;font-size:16px;min-height:44px;padding:6px 10px;border:3px solid var(--ink);border-radius:12px;background:#fff;color:var(--ink);min-width:0;width:100%}
   input:focus,.btn:focus-visible,summary:focus-visible{outline:4px solid #7A4FC4;outline-offset:2px}
   label.f{display:block;font-weight:700;font-size:14px;margin:8px 0 2px}
   .hint{font-size:13px;opacity:.85;margin:4px 0}
@@ -55,16 +52,18 @@ const STYLE = `
   summary::before{content:"";width:0;height:0;border:7px solid transparent;border-left-color:var(--ink);margin-right:-2px;transition:transform .15s}
   details[open] summary::before{transform:rotate(90deg) translate(3px,-3px)}
   summary .pill{margin-left:auto}
-  .dev{display:grid;grid-template-columns:40px 1fr;gap:4px 10px;align-items:center;padding:10px 12px;border-top:2px dashed #1b1b1b33}
+  .dev{font:inherit;color:var(--ink);width:100%;text-align:left;background:none;border:0;border-top:2px dashed #1b1b1b33;cursor:pointer;display:grid;grid-template-columns:40px 1fr auto;gap:2px 10px;align-items:center;padding:10px 12px;min-height:60px}
   .dev .ic{width:40px;height:40px;border:3px solid var(--ink);border-radius:12px;display:grid;place-items:center;background:#eee;grid-row:span 2}
   .dev.live .ic{background:#9BE37A}
   .dev .ic svg{width:26px;height:26px}
-  .dev .nm{font-weight:700;font-size:15px;line-height:1.2;display:flex;gap:6px;align-items:center;flex-wrap:wrap}
-  .dev .nm small{font-weight:500;font-size:12px;opacity:.75}
-  .dev .pick{display:flex;gap:6px;align-items:center}
-  .dev .pick input{min-height:40px;font-size:14px}
-  .dev .x{min-height:40px;width:40px;padding:0;flex:none}
-  .dev .st{font-size:12px;font-weight:700}
+  .dev .nm{font-weight:700;font-size:15px;line-height:1.2}
+  .dev .nm small{display:block;font-weight:500;font-size:12px;opacity:.75}
+  .dev .lk{grid-column:2;font-size:13px;overflow-wrap:anywhere}
+  .dev.live .lk{font-weight:700}
+  .dev .go{grid-column:3;grid-row:1 / span 2;background:var(--sun);box-shadow:2px 2px 0 var(--ink)}
+  .dev.live .go{background:#fff}
+  .dev:focus-visible{outline:4px solid #7A4FC4;outline-offset:-4px}
+  @media (hover:hover){.dev:hover{background:#FFF3B8}}
   .slider{display:flex;gap:8px;align-items:center}
   .kinds{display:grid;grid-template-columns:repeat(auto-fill,minmax(84px,1fr));gap:6px;margin:8px 0}
   .kind{flex-direction:column;gap:1px;font-size:12px;min-height:62px;padding:4px 2px;line-height:1.1;text-align:center}
@@ -76,10 +75,8 @@ const STYLE = `
   #plan text{font-family:inherit;font-weight:700;pointer-events:none}
   .tabs .btn{min-height:40px;padding:4px 12px;font-size:14px}
   .dev.sel{background:#FFF3B8}
-  .dev .ic{cursor:pointer}
-  #selBox{border:3px dashed var(--ink);border-radius:14px;padding:8px 10px;margin-top:8px;background:#fff}
   .slider input{flex:1}
-`;
+${SETUP_STYLE}`;
 
 class ToonHouseCardEditor extends HTMLElement {
   setConfig(config) {
@@ -88,8 +85,8 @@ class ToonHouseCardEditor extends HTMLElement {
       ensureFont();
       this.attachShadow({ mode: "open" });
       this._skeleton();
+      this._setup = new Setup(this);
     }
-    this._lists();
     this._loadHouse();
     this._overlayChanged();
     this._sync();
@@ -99,8 +96,21 @@ class ToonHouseCardEditor extends HTMLElement {
   set hass(hass) {
     this._hass = hass;
     if (!this.shadowRoot) return;
-    this._lists();
     this._states();
+    this._setup.refresh();
+  }
+  // While the editor is open, a tap on a thing in the 3D card opens its setup window here
+  connectedCallback() {
+    this._onCardTap = this._onCardTap || ((e) => {
+      const id = e.detail && e.detail.id;
+      if (!id || !this._setup || !this.getClientRects().length || !this._find(id)) return;
+      e.preventDefault();
+      this._open(id);
+    });
+    window.addEventListener("toon-house-setup", this._onCardTap);
+  }
+  disconnectedCallback() {
+    window.removeEventListener("toon-house-setup", this._onCardTap);
   }
 
   _fire(config) {
@@ -172,25 +182,19 @@ class ToonHouseCardEditor extends HTMLElement {
 
       <section>
         <h3>${ICON.pin}Add or move things</h3>
-        <p class="hint">Pick a sticker, then tap the plan where it goes. Drag anything on the plan to move it.</p>
+        <p class="hint">Pick a sticker, then tap the plan where it goes. Tap anything on the plan to set it up, or drag it to move it.</p>
         <div class="kinds" id="kinds"></div>
         <div class="row tabs" id="ptabs"></div>
         <div id="planBox"><svg id="plan" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Plan of this floor"></svg></div>
-        <div id="selBox" style="display:none">
-          <label class="f" for="selName">Name</label>
-          <div class="row" style="margin-top:0"><input id="selName" type="text" autocomplete="off" style="flex:1;width:auto"><button class="btn" id="selRemove">${ICON.remove}Remove</button></div>
-          <p class="hint" id="selHint"></p>
-        </div>
         <div class="row" id="hiddenBox" style="display:none"><span class="pill" id="hiddenN"></span><button class="btn" id="restore">Put them back</button></div>
       </section>
 
       <section>
         <h3>${ICON.plug}Connect your things</h3>
-        <p class="hint">Pick the real device for each one. Grey ones are not connected yet and stay grey on the card.</p>
+        <p class="hint">Tap one and I'll help you set it up. Grey ones are not connected yet and stay grey on the card.</p>
         <div id="devs"></div>
       </section>
       <p class="hint" style="color:#1b1b1b;margin:10px 4px 0">Prefer typing? "Show code editor" below still works.</p>
-      <div id="lists"></div>
     </div>`;
     const q = (s) => this.shadowRoot.querySelector(s);
     q("#url").addEventListener("change", (e) => { const v = e.target.value.trim(); if (v) this._set("layout", v); });
@@ -226,8 +230,6 @@ class ToonHouseCardEditor extends HTMLElement {
       b.addEventListener("click", () => this._armKind(this._arm === kind ? null : kind));
       q("#kinds").appendChild(b);
     }
-    q("#selName").addEventListener("change", (e) => this._rename(this._sel, e.target.value));
-    q("#selRemove").addEventListener("click", () => this._remove(this._sel));
     q("#restore").addEventListener("click", () => {
       const over = { ...(this._config.devices || {}) };
       for (const k of Object.keys(over)) if (over[k] === null) delete over[k];
@@ -255,7 +257,7 @@ class ToonHouseCardEditor extends HTMLElement {
       // the click that may follow is already dealt with here
       this._swallow = true;
       setTimeout(() => { this._swallow = false; }, 350);
-      if (!d.moved) { this._select(d.id); return; }
+      if (!d.moved) { this._open(d.id); return; }
       const p = this._point(e);
       this._move(d.id, p.x, p.y);
     };
@@ -267,7 +269,8 @@ class ToonHouseCardEditor extends HTMLElement {
       if (this._swallow) return;
       const pin = e.target.closest ? e.target.closest(".pin") : null, p = this._point(e);
       if (this._arm) this._place(this._arm, p.x, p.y);
-      else this._select(pin ? pin.dataset.dev : null);
+      else if (pin) this._open(pin.dataset.dev);
+      else this._select(null);
     });
   }
 
@@ -370,19 +373,9 @@ class ToonHouseCardEditor extends HTMLElement {
     if (this._problems && this._problems.length) this._say("Something to check", `${this._problems[0]}${this._problems.length > 1 ? ` (and ${this._problems.length - 1} more)` : ""}`, "oops", true);
     else if (!all.length) this._say("Your house is ready", "Now add your lights and blinds: pick a sticker below and tap the plan where it goes.", "happy");
     else if (linked >= all.length) this._say("Everything is connected!", "Tap things on the card to try them.", "party");
-    else this._say("Let's connect your home", `${linked} of ${all.length} things are connected. Pick the real device for each one below.`, linked ? "happy" : "wow");
+    else this._say("Let's connect your home", `${linked} of ${all.length} things are connected. Tap a grey one and I'll help you set it up.`, linked ? "happy" : "wow");
   }
 
-  // one list of choices per kind of device
-  _lists() {
-    if (!this._hass) return;
-    // rebuilt only when devices are added to or removed from Home Assistant
-    const n = Object.keys(this._hass.states).length;
-    if (n === this._listCount) return;
-    this._listCount = n;
-    const box = this.shadowRoot.querySelector("#lists"), ids = Object.keys(this._hass.states).sort();
-    box.innerHTML = Object.entries(DOMAINS).map(([kind, doms]) => `<datalist id="thc-${kind}">${ids.filter((id) => doms.includes(id.split(".")[0])).map((id) => `<option value="${esc(id)}" label="${esc((this._hass.states[id].attributes || {}).friendly_name || "")}"></option>`).join("")}</datalist>`).join("");
-  }
   _devices() {
     if (!this.shadowRoot) return;
     const box = this.shadowRoot.querySelector("#devs"), h = this._house;
@@ -397,17 +390,13 @@ class ToonHouseCardEditor extends HTMLElement {
       det.open = firstTime ? fi === 0 : open.has(fid);
       det.innerHTML = `<summary>${esc(f.name || (fi === 0 ? "Ground" : `Floor ${fi}`))}<span class="pill"></span></summary>`;
       for (const d of devs) {
-        const row = document.createElement("div"), room = this._roomName(f, d), kind = DOMAINS[d.kind] ? d.kind : "sensor";
+        const row = document.createElement("button"), room = this._roomName(f, d);
         row.className = "dev";
         row.dataset.id = d.id;
-        row.innerHTML = `<div class="ic">${ICON[d.kind] || ICON.sensor}</div>
-          <div class="nm">${esc(d.name || KIND_NAME[d.kind] || "Device")}<small>${esc([KIND_NAME[d.kind] || d.kind, room].filter(Boolean).join(" in "))}</small><span class="st"></span></div>
-          <div class="pick"><input list="thc-${kind}" placeholder="Not connected yet" autocomplete="off" spellcheck="false" aria-label="Device for ${esc(d.name || d.kind)}"><button class="btn x" title="Disconnect" aria-label="Disconnect ${esc(d.name || d.kind)}">${ICON.close}</button></div>`;
-        const input = row.querySelector("input");
-        input.value = this._entityOf(d) || "";
-        input.addEventListener("change", () => this._link(d, input.value.trim(), input));
-        row.querySelector(".x").addEventListener("click", () => this._link(d, "", input));
-        row.querySelector(".ic").addEventListener("click", () => { this._pf = fi; this._select(d.id, true); });
+        row.innerHTML = `<span class="ic">${ICON[d.kind] || ICON.sensor}</span>
+          <span class="nm">${esc(d.name || this.kindName(d.kind))}<small>${esc([this.kindName(d.kind), room].filter(Boolean).join(" in "))}</small></span>
+          <span class="pill go"></span><span class="lk"></span>`;
+        row.addEventListener("click", () => this._open(d.id));
         row.classList.toggle("sel", d.id === this._sel);
         det.appendChild(row);
       }
@@ -415,18 +404,52 @@ class ToonHouseCardEditor extends HTMLElement {
     });
     this._states();
   }
-  _link(d, value, input) {
+  // connect a thing on the plan to a real device ("" disconnects it); false if that device is not known
+  _link(d, value) {
     if (value && this._hass && !this._hass.states[value]) {
-      this._tell("I don't know that one", `"${value}" isn't a device in Home Assistant. Pick one from the list.`, "oops", true);
-      input.value = this._entityOf(d) || "";
-      return;
+      this._tell("I don't know that one", `"${value}" isn't a device in Home Assistant.`, "oops", true);
+      return false;
     }
     const map = { ...(this._config.entities || {}) }, file = d.entity || null;
     if ((value || null) === file) delete map[d.id];
     else map[d.id] = value || null;
-    input.value = value;
     this._fire({ ...this._config, entities: map });
     this._states();
+    return true;
+  }
+  kindName(kind) {
+    return KIND_NAME[kind] || kind || "Device";
+  }
+  // which real devices are already taken, and by what: { entity: name of the thing using it }
+  usedBy(exceptId) {
+    const out = {};
+    for (const f of this._house ? this._house.floors : []) for (const d of f.devices || []) {
+      const ent = d.id === exceptId ? null : this._entityOf(d);
+      if (ent) out[ent] = d.name || this.kindName(d.kind);
+    }
+    return out;
+  }
+  // ---------- the setup window ----------
+  _open(id, fresh) {
+    const hit = this._find(id);
+    if (!hit) return;
+    this._pf = hit.fi;
+    this._arm = null;
+    this._sel = id;
+    this._plan();
+    this._selBox();
+    this._setup.open(id, null, !!fresh);
+  }
+  _setupClosed() {
+    this._talk();
+  }
+  // "Move it" in the setup window: show the plan with the thing picked out, ready to drag
+  _moveMode(id) {
+    const hit = this._find(id);
+    if (!hit) return;
+    this._pf = hit.fi;
+    this._select(id, true);
+    this._tell("Drag it", `Drag ${hit.d.name || "it"} on the plan to its new place.`, "think");
   }
   // live values beside each device, and the count on each floor
   _states() {
@@ -441,9 +464,8 @@ class ToonHouseCardEditor extends HTMLElement {
         if (!row) continue;
         if (ent) linked++;
         row.classList.toggle("live", !!ent);
-        row.querySelector(".st").textContent = !ent ? "" : !st ? "not found" : `${st.state}${(st.attributes && st.attributes.unit_of_measurement) || ""}`;
-        const input = row.querySelector("input");
-        if (this.shadowRoot.activeElement !== input && input.value !== (ent || "")) input.value = ent || "";
+        row.querySelector(".lk").textContent = !ent ? "Not connected yet" : `${(st && st.attributes && st.attributes.friendly_name) || ent}: ${stateText(st)}`;
+        row.querySelector(".go").textContent = ent ? "Change" : "Set up";
       }
       det.querySelector("summary .pill").textContent = `${linked} of ${(f.devices || []).length} connected`;
     });
@@ -525,13 +547,8 @@ class ToonHouseCardEditor extends HTMLElement {
     }
     return null;
   }
+  // show which thing is picked, in the list as well as on the plan
   _selBox() {
-    const q = (x) => this.shadowRoot.querySelector(x), hit = this._sel ? this._find(this._sel) : null;
-    q("#selBox").style.display = hit ? "" : "none";
-    if (hit) {
-      if (this.shadowRoot.activeElement !== q("#selName")) q("#selName").value = hit.d.name || "";
-      q("#selHint").textContent = `${KIND_NAME[hit.d.kind] || hit.d.kind}. Drag it on the plan to move it. Connect it to a real device in the list below.`;
-    }
     this.shadowRoot.querySelectorAll(".dev").forEach((r) => r.classList.toggle("sel", r.dataset.id === this._sel));
   }
   _select(id, show) {
@@ -597,7 +614,8 @@ class ToonHouseCardEditor extends HTMLElement {
     this._sel = id;
     this._fire({ ...this._config, devices: { ...(this._config.devices || {}), [id]: { floor: now.f.id, kind, name, ...pos } } });
     this._selBox();
-    this._tell(`${name} added!`, `Now pick its real device in the list below. To see it in 3D, switch the card to ${now.f.name || "that floor"}.`, "party");
+    this._tell(`${name} added!`, `To see it in 3D, switch the card to ${now.f.name || "that floor"}.`, "party");
+    this._setup.open(id, "pick", true);
   }
   _move(id, x, y) {
     const hit = this._find(id);
@@ -632,6 +650,7 @@ class ToonHouseCardEditor extends HTMLElement {
     over[id] = { ...(over[id] || {}), name };
     this._fire({ ...this._config, devices: over });
     this._selBox();
+    this._states();
   }
 }
 

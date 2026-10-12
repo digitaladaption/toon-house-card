@@ -125,7 +125,7 @@ devices:
 | `rot` | For a `tv`: which way it faces, in degrees |
 | `nav` | A dashboard path to open if it is tapped while still planned |
 
-You can leave `entity` as `null` in the file and connect devices in the card editor instead. Those links are kept in the card's settings (`entities`), not in this file.
+You can leave `entity` as `null` in the file and connect devices in the card editor instead: tap one and its setup window helps you pick the real device. Those links are kept in the card's settings (`entities`), not in this file.
 
 You can also add and move devices in the card editor by tapping a plan of the floor. Those are kept in the card's settings too, under `devices`:
 

@@ -13,7 +13,7 @@ import { applyOverlay } from "./layout.js";
 import { ensureFont, FONT } from "./font.js";
 import "./editor.js";
 
-const VERSION = "0.5.0";
+const VERSION = "0.6.0";
 const SILL = 0.9, HEAD = 2.1, DOOR_HEAD = 2.05, GAP = 0.2;
 const tex = (pattern, a, b) => `tex|${pattern}|${a}|${b || ""}`;
 const esc = (s) => String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/"/g, "&quot;");
@@ -1092,6 +1092,8 @@ class ToonHouseCard extends HTMLElement {
   }
   _tap(dev) {
     const d = dev.d, st = dev.st || devState(d, this._hass);
+    // with the card editor open, a tap sets the thing up instead of using it (the editor cancels the event)
+    if (d.id && !window.dispatchEvent(new CustomEvent("toon-house-setup", { cancelable: true, detail: { id: d.id } }))) { this._toast.style.display = "none"; return; }
     if (st.planned) {
       const nav = d.nav || this._config.planned_path || "";
       this._say(`${d.name || d.kind}: planned, not fitted yet.${nav ? " Tap here for more." : ""}`, nav);

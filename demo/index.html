@@ -42,13 +42,14 @@
   try { layout = await (await fetch(url)).json(); } catch (e) { /* the card shows the problem */ }
   const states = {};
   let lights = true, heat = true, cover = 40;
+  const temps = {};
   const devices = (layout.floors || []).flatMap((f) => f.devices || []).filter((d) => d.entity);
   function fill() {
     for (const d of devices) {
       const s = { entity_id: d.entity, state: "on", attributes: {} };
       if (d.kind === "light" || d.kind === "switch") s.state = lights ? "on" : "off";
       else if (d.kind === "cover") { s.state = cover > 0 ? "open" : "closed"; s.attributes.current_position = cover; }
-      else if (d.kind === "climate") { s.state = "heat"; s.attributes = { current_temperature: 20.5, hvac_action: heat ? "heating" : "idle" }; }
+      else if (d.kind === "climate") { s.state = "heat"; s.attributes = { current_temperature: 20.5, temperature: temps[d.entity] != null ? temps[d.entity] : 21, hvac_action: heat ? "heating" : "idle" }; }
       else if (d.kind === "lock") s.state = "locked";
       else if (d.kind === "contact" || d.kind === "motion") s.state = "off";
       else if (d.kind === "camera") s.state = "idle";
@@ -58,8 +59,22 @@
     }
   }
   // a few spare devices, so the editor has something to offer for the grey (planned) ones
-  const SPARE = { "light.office": ["on", "Office light"], "light.spare_lamp": ["off", "Spare lamp"], "cover.nursery_blind": ["open", "Nursery blind"], "climate.main_bedroom": ["heat", "Main bedroom radiator"], "binary_sensor.patio_door": ["off", "Patio door"], "media_player.kitchen_speaker": ["playing", "Kitchen speaker"], "sensor.bathroom_humidity": ["61", "Bathroom humidity"] };
-  for (const [id, [state, name]] of Object.entries(SPARE)) states[id] = { entity_id: id, state, attributes: { friendly_name: name, ...(id.startsWith("cover") ? { current_position: 70 } : {}), ...(id.startsWith("climate") ? { current_temperature: 19.5, hvac_action: "heating" } : {}), ...(id.startsWith("sensor") ? { unit_of_measurement: "%" } : {}) } };
+  const SPARE = { "light.office": ["on", "Office light"], "light.spare_lamp": ["off", "Spare lamp"], "cover.nursery_blind": ["open", "Nursery blind"], "climate.main_bedroom": ["heat", "Main bedroom radiator"], "climate.lounge_trv": ["heat", "Lounge TRV"], "sensor.lounge_temperature": ["20.4", "Lounge temperature"], "sensor.lounge_trv_battery": ["88", "Lounge TRV battery"], "binary_sensor.patio_door": ["off", "Patio door"], "media_player.kitchen_speaker": ["playing", "Kitchen speaker"], "sensor.bathroom_humidity": ["61", "Bathroom humidity"] };
+  for (const [id, [state, name]] of Object.entries(SPARE)) states[id] = { entity_id: id, state, attributes: { friendly_name: name, ...(id.startsWith("cover") ? { current_position: 70 } : {}), ...(id.startsWith("climate") ? { current_temperature: 19.5, temperature: 20, hvac_action: "heating" } : {}), ...(id.startsWith("sensor") ? (id.endsWith("temperature") ? { unit_of_measurement: "°C", device_class: "temperature" } : { unit_of_measurement: "%" }) : {}) } };
+  // rooms as Home Assistant knows them ("areas"), so the editor can guess which device is in which room
+  const areas = { lounge: { name: "Lounge" }, kitchen: { name: "Kitchen" }, master: { name: "Master bedroom" }, bathroom: { name: "Bathroom" }, nursery: { name: "Nursery" }, office: { name: "Study" } };
+  const entities = { "climate.lounge_trv": { area_id: "lounge" }, "sensor.lounge_temperature": { area_id: "lounge" }, "sensor.lounge_trv_battery": { area_id: "lounge", entity_category: "diagnostic" }, "climate.main_bedroom": { area_id: "master" }, "media_player.kitchen_speaker": { area_id: "kitchen" }, "sensor.bathroom_humidity": { area_id: "bathroom" }, "cover.nursery_blind": { area_id: "nursery" }, "light.office": { area_id: "office" } };
+  function callService(domain, service, data) {
+    const s = states[data.entity_id], spare = SPARE[data.entity_id];
+    window.lastCall = { domain, service, data };
+    if (!s) return;
+    if (service === "toggle") { if (spare) s.state = s.state === "on" ? "off" : "on"; else lights = !lights; }
+    else if (domain === "cover" && service !== "stop_cover") {
+      const pos = service === "open_cover" ? 100 : 0;
+      if (spare) { s.state = pos ? "open" : "closed"; s.attributes.current_position = pos; } else { cover = pos; document.getElementById("cover").value = pos; }
+    } else if (service === "set_temperature") { if (spare) s.attributes.temperature = data.temperature; else temps[data.entity_id] = data.temperature; }
+    push();
+  }
   let card, toastTimer, config, editor;
   function toast(text) {
     const t = document.getElementById("toast");
@@ -72,7 +87,7 @@
     fill();
     document.getElementById("lights").classList.toggle("on", lights);
     document.getElementById("heat").classList.toggle("on", heat);
-    const hass = { states: { ...states }, callService: (domain, service, data) => { if (service !== "toggle") return; const s = states[data.entity_id]; if (s && SPARE[data.entity_id]) s.state = s.state === "on" ? "off" : "on"; else lights = !lights; push(); } };
+    const hass = { states: { ...states }, areas, entities, devices: {}, callService };
     card.hass = hass;
     if (editor) editor.hass = hass;
   }

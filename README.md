@@ -17,7 +17,7 @@ A cartoon 3D dollhouse of your home for Home Assistant. You describe your rooms,
 - **Three kinds of view.** One cutaway per floor (walls cut low so you can see in), and the whole house from outside with the roof on. Drag to turn, pinch or scroll to zoom.
 - **Devices in the right place.** A blind sits on its window and its slats move with the real position. Lights glow and light the floor. Radiators turn orange when heating. The garage door opens.
 - **Tap to control.** Tapping a light or switch toggles it. Tapping anything else opens its normal Home Assistant details.
-- **A cartoon editor.** Connect each light and blind to its real device by picking from a list. No code needed.
+- **A cartoon editor.** Tap a light, blind or radiator and a little house called Roofus helps you set it up: pick the real device, try it, done. No code needed.
 - **Plan ahead.** A device with no entity is drawn grey as "planned", so you can lay out kit you have not bought yet.
 - **One file, no internet.** The 3D library and the font are bundled in, so it works on a local-only setup.
 - **Light on the tablet.** It only redraws when something changes.
@@ -115,11 +115,21 @@ Edit the card on your dashboard and you get a cartoon editor instead of a box of
 - **Your house**: point at a house file, or load one straight into the card so there is nothing to copy onto the server.
 - **The look**: cartoon or brick colours, which view opens first, the name and the height.
 - **Add or move things**: pick a sticker (light, blind, radiator, lock, camera...) and tap the little plan where it goes. Blinds snap onto the nearest window and radiators onto the nearest wall. Drag anything to move it.
-- **Connect your things**: every light, blind, radiator and sensor in the house is listed by floor. Pick the real Home Assistant device for each one. Grey ones are not connected yet.
+- **Connect your things**: every light, blind, radiator and sensor in the house is listed by floor. Grey ones are not connected yet.
 
 ![Adding things by tapping the plan](docs/img/editor-plan.png)
 
-![Connecting devices](docs/img/editor-devices.png)
+### The setup window
+
+While you are editing the card, tap anything, on the plan, in the list or on the 3D house itself, and its setup window opens. It connects devices that are already in Home Assistant; it does not pair new ones. It has three steps:
+
+1. **Pick it.** Your real devices of the right kind, with the best guesses for that room at the top. It uses your Home Assistant areas and the device names, and knows that a lounge is a living room. There is a search box, and "I haven't got it yet" keeps it grey.
+2. **Try it.** The live reading, and buttons to switch a light, move a blind or nudge a radiator up or down, so you can see it is the right one. Nothing is switched unless you press a button, and locks are never touched.
+3. **Finish.** Name it, move it or remove it.
+
+| Pick it | Try it |
+|---|---|
+| ![Picking the real device](docs/img/setup-pick.png) | ![Trying it](docs/img/setup-try.png) |
 
 What you add, move and connect is saved in the card's own settings, not in the house file, so it survives when you rebuild the house file. You can try the editor on the [demo page](https://digitaladaption.github.io/toon-house-card/demo/?editor).
 
