@@ -2,10 +2,10 @@
    blind and radiator to a real device. Links are saved in the card's own settings ("entities"),
    so they work whether the house is in a file or written into the card. */
 import { roofus, ICON } from "./art.js";
-import { nameDevices } from "./layout.js";
+import { applyOverlay, slug } from "./layout.js";
 import { floorWalls, roomPoints, bbox } from "./geometry.js";
 import { ensureFont, FONT } from "./font.js";
-import { THEMES } from "./theme.js";
+import { THEMES, resolveTheme, roomStyle } from "./theme.js";
 
 const IMPORTER = "https://digitaladaption.github.io/toon-house-card/importer/";
 // which kinds of Home Assistant entity suit each kind of device
@@ -15,6 +15,10 @@ const DOMAINS = {
   camera: ["camera"], speaker: ["media_player"], tv: ["media_player"], sensor: ["sensor", "binary_sensor"],
 };
 const KIND_NAME = { light: "Light", switch: "Switch", cover: "Blind or shutter", climate: "Heating", lock: "Lock", motion: "Motion sensor", contact: "Door or window sensor", camera: "Camera", speaker: "Speaker", tv: "TV", sensor: "Sensor" };
+// what can be added from the editor, and the words Roofus uses for each
+const ADD = [["light", "Light", "Tap where the light goes."], ["cover", "Blind", "Tap the window it covers."], ["climate", "Radiator", "Tap by the wall it is on. Away from a wall makes a thermostat."], ["lock", "Lock", "Tap the door it is on."], ["motion", "Motion sensor", "Tap where the sensor is."], ["contact", "Door sensor", "Tap the door or window it is on."], ["camera", "Camera", "Tap where the camera is. It can be outside."], ["speaker", "Speaker", "Tap where the speaker is."], ["tv", "TV", "Tap where the TV is."], ["sensor", "Sensor", "Tap where the sensor is."], ["switch", "Switch", "Tap where the switch is."]];
+const POSITION = ["x", "y", "room", "wall", "at"];
+const clone = (o) => JSON.parse(JSON.stringify(o));
 const esc = (s) => String(s == null ? "" : s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/"/g, "&quot;");
 
 const STYLE = `
@@ -62,6 +66,18 @@ const STYLE = `
   .dev .x{min-height:40px;width:40px;padding:0;flex:none}
   .dev .st{font-size:12px;font-weight:700}
   .slider{display:flex;gap:8px;align-items:center}
+  .kinds{display:grid;grid-template-columns:repeat(auto-fill,minmax(84px,1fr));gap:6px;margin:8px 0}
+  .kind{flex-direction:column;gap:1px;font-size:12px;min-height:62px;padding:4px 2px;line-height:1.1;text-align:center}
+  .kind svg{width:28px;height:28px}
+  #planBox{border:3px solid var(--ink);border-radius:14px;background:#62CE3C;overflow:hidden}
+  #planBox.arm{outline:4px dashed #7A4FC4;outline-offset:2px;cursor:crosshair}
+  #plan{display:block;width:100%;height:auto}
+  #plan .pin{touch-action:none;cursor:grab}
+  #plan text{font-family:inherit;font-weight:700;pointer-events:none}
+  .tabs .btn{min-height:40px;padding:4px 12px;font-size:14px}
+  .dev.sel{background:#FFF3B8}
+  .dev .ic{cursor:pointer}
+  #selBox{border:3px dashed var(--ink);border-radius:14px;padding:8px 10px;margin-top:8px;background:#fff}
   .slider input{flex:1}
 `;
 
@@ -75,6 +91,7 @@ class ToonHouseCardEditor extends HTMLElement {
     }
     this._lists();
     this._loadHouse();
+    this._overlayChanged();
     this._sync();
     this._states();
   }
@@ -89,10 +106,24 @@ class ToonHouseCardEditor extends HTMLElement {
   _fire(config) {
     // tidy: no empty leftovers in the saved settings
     if (config.entities && !Object.keys(config.entities).length) delete config.entities;
+    if (config.devices && !Object.keys(config.devices).length) delete config.devices;
     for (const k of ["title", "theme", "height"]) if (config[k] === "" || config[k] == null) delete config[k];
     this._config = config;
     this.dispatchEvent(new CustomEvent("config-changed", { detail: { config }, bubbles: true, composed: true }));
+    this._overlayChanged();
     this._sync();
+  }
+  // devices were added, moved or removed: redo the list and the plan
+  _overlayChanged() {
+    if (!this._file || JSON.stringify(this._config.devices || null) === this._overKey) return;
+    this._rebuildHouse();
+    this._devices();
+    this._plan();
+  }
+  _rebuildHouse() {
+    this._overKey = JSON.stringify(this._config.devices || null);
+    this._house = applyOverlay(clone(this._file), this._config.devices);
+    this._house.floors.forEach((f) => (f.rooms || []).forEach((r, k) => { r.id = r.id || `${f.id}_room${k}`; }));
   }
   _set(key, value) {
     this._fire({ ...this._config, [key]: value });
@@ -140,6 +171,20 @@ class ToonHouseCardEditor extends HTMLElement {
       </section>
 
       <section>
+        <h3>${ICON.pin}Add or move things</h3>
+        <p class="hint">Pick a sticker, then tap the plan where it goes. Drag anything on the plan to move it.</p>
+        <div class="kinds" id="kinds"></div>
+        <div class="row tabs" id="ptabs"></div>
+        <div id="planBox"><svg id="plan" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Plan of this floor"></svg></div>
+        <div id="selBox" style="display:none">
+          <label class="f" for="selName">Name</label>
+          <div class="row" style="margin-top:0"><input id="selName" type="text" autocomplete="off" style="flex:1;width:auto"><button class="btn" id="selRemove">${ICON.remove}Remove</button></div>
+          <p class="hint" id="selHint"></p>
+        </div>
+        <div class="row" id="hiddenBox" style="display:none"><span class="pill" id="hiddenN"></span><button class="btn" id="restore">Put them back</button></div>
+      </section>
+
+      <section>
         <h3>${ICON.plug}Connect your things</h3>
         <p class="hint">Pick the real device for each one. Grey ones are not connected yet and stay grey on the card.</p>
         <div id="devs"></div>
@@ -161,7 +206,7 @@ class ToonHouseCardEditor extends HTMLElement {
           this._showUrl = false;
           this._set("layout", house);
         } catch (err) {
-          this._say("That file didn't work", `I couldn't read it as a house file: ${err.message}.`, "oops", true);
+          this._tell("That file didn't work", `I couldn't read it as a house file: ${err.message}.`, "oops", true);
         }
       };
       fr.readAsText(file);
@@ -173,6 +218,57 @@ class ToonHouseCardEditor extends HTMLElement {
     q("#fixed").addEventListener("click", () => this._set("height", 520));
     q("#height").addEventListener("change", (e) => this._set("height", Number(e.target.value)));
     q("#height").addEventListener("input", (e) => { q("#hVal").textContent = `${e.target.value} px`; });
+    for (const [kind, label] of ADD) {
+      const b = document.createElement("button");
+      b.className = "btn kind";
+      b.dataset.kind = kind;
+      b.innerHTML = `${ICON[kind] || ICON.sensor}<span>${label}</span>`;
+      b.addEventListener("click", () => this._armKind(this._arm === kind ? null : kind));
+      q("#kinds").appendChild(b);
+    }
+    q("#selName").addEventListener("change", (e) => this._rename(this._sel, e.target.value));
+    q("#selRemove").addEventListener("click", () => this._remove(this._sel));
+    q("#restore").addEventListener("click", () => {
+      const over = { ...(this._config.devices || {}) };
+      for (const k of Object.keys(over)) if (over[k] === null) delete over[k];
+      this._fire({ ...this._config, devices: over });
+    });
+    const svg = q("#plan");
+    svg.addEventListener("pointerdown", (e) => {
+      const pin = e.target.closest ? e.target.closest(".pin") : null;
+      if (!pin || this._arm) return;
+      this._dragging = { id: pin.dataset.dev, el: pin, from: this._point(e), moved: false };
+      pin.setPointerCapture(e.pointerId);
+    });
+    svg.addEventListener("pointermove", (e) => {
+      const d = this._dragging;
+      if (!d) return;
+      const p = this._point(e);
+      if (!d.moved && Math.hypot(p.x - d.from.x, p.y - d.from.y) < 0.2) return;
+      d.moved = true;
+      d.el.setAttribute("transform", `translate(${p.x} ${p.y})`);
+    });
+    const drop = (e) => {
+      const d = this._dragging;
+      this._dragging = null;
+      if (!d) return;
+      // the click that may follow is already dealt with here
+      this._swallow = true;
+      setTimeout(() => { this._swallow = false; }, 350);
+      if (!d.moved) { this._select(d.id); return; }
+      const p = this._point(e);
+      this._move(d.id, p.x, p.y);
+    };
+    // A finger on a pin drags the pin, not the page. Anywhere else on the plan still scrolls the page.
+    svg.addEventListener("touchstart", (e) => { if (!this._arm && e.target.closest && e.target.closest(".pin")) e.preventDefault(); }, { passive: false });
+    svg.addEventListener("pointerup", drop);
+    svg.addEventListener("pointercancel", () => { this._dragging = null; this._plan(); });
+    svg.addEventListener("click", (e) => {
+      if (this._swallow) return;
+      const pin = e.target.closest ? e.target.closest(".pin") : null, p = this._point(e);
+      if (this._arm) this._place(this._arm, p.x, p.y);
+      else this._select(pin ? pin.dataset.dev : null);
+    });
   }
 
   // read the house (from the card settings or its file) so the rooms and devices can be listed
@@ -181,6 +277,7 @@ class ToonHouseCardEditor extends HTMLElement {
     if (key === this._houseKey) return;
     this._houseKey = key;
     this._house = null;
+    this._file = null;
     this._houseError = "";
     try {
       if (typeof src === "string") {
@@ -189,18 +286,33 @@ class ToonHouseCardEditor extends HTMLElement {
         this._house = await r.json();
       } else if (src) this._house = JSON.parse(JSON.stringify(src));
       if (!this._house || !Array.isArray(this._house.floors)) throw new Error("it has no floors in it");
-      nameDevices(this._house);
+      this._file = this._house;
+      const named = applyOverlay(clone(this._file), null);
+      named.floors.forEach((f) => (f.rooms || []).forEach((r, k) => { r.id = r.id || `${f.id}_room${k}`; }));
+      this._fileIds = new Set(named.floors.flatMap((f) => (f.devices || []).map((d) => d.id)));
+      this._fw = [];
       this._problems = [];
-      for (const f of this._house.floors) {
-        try { this._problems.push(...floorWalls(JSON.parse(JSON.stringify(f))).warnings); } catch (e) { this._problems.push(e.message); }
+      for (const f of named.floors) {
+        try {
+          const w = floorWalls(clone(f));
+          this._fw.push(w);
+          this._problems.push(...w.warnings);
+        } catch (e) {
+          this._fw.push(null);
+          this._problems.push(e.message);
+        }
       }
+      this._rebuildHouse();
     } catch (e) {
       this._house = null;
+      this._file = null;
       this._houseError = e.message;
     }
     if (key !== this._houseKey) return;
+    this._sel = null;
     this._sync();
     this._devices();
+    this._plan();
   }
   _roomName(floor, d) {
     const rooms = floor.rooms || [];
@@ -245,12 +357,18 @@ class ToonHouseCardEditor extends HTMLElement {
     }
     this._talk();
   }
+  // say something about what the user just did, and keep it up for a few seconds
+  _tell(title, text, mood, bad) {
+    this._hold = Date.now() + 6000;
+    this._say(title, text, mood, bad);
+  }
   _talk() {
+    if (Date.now() < (this._hold || 0)) return;
     if (this._houseError) { this._say("I can't find your house", `Something is wrong with the house file: ${this._houseError}.`, "oops", true); return; }
     if (!this._house) { this._say("One moment", "I'm fetching your house.", "think"); return; }
     const all = this._house.floors.flatMap((f) => f.devices || []), linked = all.filter((d) => this._entityOf(d)).length;
     if (this._problems && this._problems.length) this._say("Something to check", `${this._problems[0]}${this._problems.length > 1 ? ` (and ${this._problems.length - 1} more)` : ""}`, "oops", true);
-    else if (!all.length) this._say("Your house is ready", "There are no lights or blinds in the house file yet. Add them to the file, then connect them here.", "think");
+    else if (!all.length) this._say("Your house is ready", "Now add your lights and blinds: pick a sticker below and tap the plan where it goes.", "happy");
     else if (linked >= all.length) this._say("Everything is connected!", "Tap things on the card to try them.", "party");
     else this._say("Let's connect your home", `${linked} of ${all.length} things are connected. Pick the real device for each one below.`, linked ? "happy" : "wow");
   }
@@ -289,6 +407,8 @@ class ToonHouseCardEditor extends HTMLElement {
         input.value = this._entityOf(d) || "";
         input.addEventListener("change", () => this._link(d, input.value.trim(), input));
         row.querySelector(".x").addEventListener("click", () => this._link(d, "", input));
+        row.querySelector(".ic").addEventListener("click", () => { this._pf = fi; this._select(d.id, true); });
+        row.classList.toggle("sel", d.id === this._sel);
         det.appendChild(row);
       }
       box.appendChild(det);
@@ -297,7 +417,7 @@ class ToonHouseCardEditor extends HTMLElement {
   }
   _link(d, value, input) {
     if (value && this._hass && !this._hass.states[value]) {
-      this._say("I don't know that one", `"${value}" isn't a device in Home Assistant. Pick one from the list.`, "oops", true);
+      this._tell("I don't know that one", `"${value}" isn't a device in Home Assistant. Pick one from the list.`, "oops", true);
       input.value = this._entityOf(d) || "";
       return;
     }
@@ -327,6 +447,191 @@ class ToonHouseCardEditor extends HTMLElement {
       }
       det.querySelector("summary .pill").textContent = `${linked} of ${(f.devices || []).length} connected`;
     });
+  }
+
+  // ---------- the little plan: add, move and remove things ----------
+  _floorNow() {
+    const h = this._house;
+    if (!h || !h.floors.length) return null;
+    if (this._pf == null || !h.floors[this._pf]) this._pf = 0;
+    return { f: h.floors[this._pf], w: this._fw[this._pf], i: this._pf };
+  }
+  _point(e) {
+    const svg = this.shadowRoot.querySelector("#plan"), pt = svg.createSVGPoint();
+    pt.x = e.clientX;
+    pt.y = e.clientY;
+    return pt.matrixTransform(svg.getScreenCTM().inverse());
+  }
+  // where a device is drawn on the plan
+  _spot(f, d) {
+    if (d.x != null) return [d.x, d.y];
+    const r = (f.rooms || []).find((x) => x.id === d.room);
+    if (!r) return null;
+    const b = bbox(roomPoints(r)), inset = d.kind === "cover" || d.kind === "contact" ? 0 : 0.32;
+    return d.wall === "n" ? [d.at, b.y0 + inset] : d.wall === "s" ? [d.at, b.y1 - inset] : d.wall === "w" ? [b.x0 + inset, d.at] : [b.x1 - inset, d.at];
+  }
+  _plan() {
+    if (!this.shadowRoot) return;
+    const q = (x) => this.shadowRoot.querySelector(x), now = this._floorNow(), svg = q("#plan"), tabs = q("#ptabs");
+    if (!now) { svg.innerHTML = ""; tabs.innerHTML = ""; return; }
+    const { f, w } = now, h = this._house;
+    tabs.innerHTML = "";
+    if (h.floors.length > 1) {
+      h.floors.forEach((fl, i) => {
+        const b = document.createElement("button");
+        b.className = `btn${i === this._pf ? " on" : ""}`;
+        b.textContent = fl.name || (i === 0 ? "Ground" : `Floor ${i}`);
+        b.addEventListener("click", () => { this._pf = i; this._sel = null; this._plan(); this._selBox(); });
+        tabs.appendChild(b);
+      });
+    }
+    const theme = resolveTheme(this._config.theme || h.theme, { ...(h.colours || {}), ...(this._config.colours || {}) });
+    const rooms = (f.rooms || []).map((r) => ({ r, pts: roomPoints(r) })), bb = bbox(rooms.flatMap((x) => x.pts)), m = 0.8;
+    let bed = 0, out = "";
+    for (const { r, pts } of rooms) {
+      const st = roomStyle(theme, r, bed);
+      if (st.type === "bedroom") bed++;
+      out += `<polygon points="${pts.map((p) => p.join(",")).join(" ")}" fill="${st.floor}" stroke="#1b1b1b" stroke-width="0.14" stroke-linejoin="round"/>`;
+    }
+    for (const o of (w && w.openings) || []) {
+      if (o.kind === "opening") continue;
+      const [x0, y0, x1, y1] = o.b, fill = o.kind === "window" || o.kind === "bifold" ? "#7FD9FF" : o.kind === "frontdoor" ? "#7A4FC4" : "#FFFDF4";
+      out += `<rect x="${x0}" y="${y0}" width="${x1 - x0}" height="${y1 - y0}" fill="${fill}" stroke="#1b1b1b" stroke-width="0.05"/>`;
+    }
+    for (const { r, pts } of rooms) {
+      if (!r.name) continue;
+      const b = bbox(pts), size = Math.min(0.34, Math.max(0.2, (b.x1 - b.x0 - 0.3) / (0.6 * r.name.length)));
+      out += `<text x="${(b.x0 + b.x1) / 2}" y="${b.y0 + 0.5}" font-size="${size.toFixed(2)}" text-anchor="middle" fill="#1b1b1b" stroke="#fff" stroke-width="0.08" paint-order="stroke">${esc(r.name)}</text>`;
+    }
+    for (const d of f.devices || []) {
+      const p = this._spot(f, d);
+      if (!p) continue;
+      const sel = d.id === this._sel, fill = sel ? "#FFD83A" : this._entityOf(d) ? "#9BE37A" : "#E9E9E9";
+      const icon = (ICON[d.kind] || ICON.sensor).replace("<svg ", '<svg x="-0.3" y="-0.3" width="0.6" height="0.6" ');
+      out += `<g class="pin" data-dev="${esc(d.id)}" transform="translate(${p[0]} ${p[1]})"><title>${esc(d.name || d.kind)}</title><circle r="${sel ? 0.5 : 0.42}" fill="${fill}" stroke="#1b1b1b" stroke-width="${sel ? 0.11 : 0.07}"/>${icon}</g>`;
+    }
+    svg.setAttribute("viewBox", `${bb.x0 - m} ${bb.y0 - m} ${bb.x1 - bb.x0 + 2 * m} ${bb.y1 - bb.y0 + 2 * m}`);
+    svg.innerHTML = out;
+    q("#planBox").classList.toggle("arm", !!this._arm);
+    this.shadowRoot.querySelectorAll(".kind").forEach((b) => b.classList.toggle("on", b.dataset.kind === this._arm));
+    const hidden = Object.values(this._config.devices || {}).filter((v) => v === null).length;
+    q("#hiddenBox").style.display = hidden ? "" : "none";
+    q("#hiddenN").textContent = `${hidden} thing${hidden === 1 ? "" : "s"} from your house file hidden`;
+  }
+  _find(id) {
+    for (const [fi, f] of (this._house ? this._house.floors : []).entries()) {
+      const d = (f.devices || []).find((x) => x.id === id);
+      if (d) return { d, f, fi };
+    }
+    return null;
+  }
+  _selBox() {
+    const q = (x) => this.shadowRoot.querySelector(x), hit = this._sel ? this._find(this._sel) : null;
+    q("#selBox").style.display = hit ? "" : "none";
+    if (hit) {
+      if (this.shadowRoot.activeElement !== q("#selName")) q("#selName").value = hit.d.name || "";
+      q("#selHint").textContent = `${KIND_NAME[hit.d.kind] || hit.d.kind}. Drag it on the plan to move it. Connect it to a real device in the list below.`;
+    }
+    this.shadowRoot.querySelectorAll(".dev").forEach((r) => r.classList.toggle("sel", r.dataset.id === this._sel));
+  }
+  _select(id, show) {
+    this._sel = id || null;
+    this._plan();
+    this._selBox();
+    if (show) this.shadowRoot.querySelector("#planBox").scrollIntoView({ behavior: "smooth", block: "center" });
+  }
+  _armKind(kind) {
+    this._arm = kind;
+    this._sel = null;
+    this._plan();
+    this._selBox();
+    const a = ADD.find((x) => x[0] === kind);
+    if (a) this._tell(`Adding a ${a[1].toLowerCase()}`, a[2], "think");
+    else { this._hold = 0; this._talk(); }
+  }
+  // where a thing of this kind belongs when the plan is tapped at x, y
+  _where(kind, x, y) {
+    const now = this._floorNow(), w = now && now.w;
+    if (!w) return { error: "I can't read this floor's walls, so I can't place things on it." };
+    const round = (v) => Math.round(v * 20) / 20, room = w.roomAt(x, y);
+    const nearest = (kinds) => {
+      let best = null;
+      for (const o of w.openings) {
+        if (!kinds.includes(o.kind)) continue;
+        const [x0, y0, x1, y1] = o.b, d = Math.hypot(Math.max(x0 - x, 0, x - x1), Math.max(y0 - y, 0, y - y1));
+        if (!best || d < best.d) best = { o, d };
+      }
+      return best && best.d <= 1 ? best.o : null;
+    };
+    const onOpening = (o) => ({ room: o.room, wall: o.wall, at: round(o.at + o.width / 2) });
+    if (kind === "cover") {
+      const o = nearest(["window", "bifold", "garage"]);
+      return o ? onOpening(o) : { error: "Blinds go on a window. Tap on a window, patio door or garage door (the blue and cream strips on the walls)." };
+    }
+    if (kind === "contact" || kind === "lock") {
+      const o = nearest(kind === "lock" ? ["frontdoor", "extdoor", "door", "garage"] : ["window", "bifold", "frontdoor", "extdoor", "door", "garage"]);
+      if (o && kind === "contact") return onOpening(o);
+      if (o) { const [x0, y0, x1, y1] = o.b; return { x: round((x0 + x1) / 2 - o.n[0] * 0.3), y: round((y0 + y1) / 2 - o.n[1] * 0.3) }; }
+    }
+    if (kind === "camera" && !room) return { x: round(x), y: round(y) };
+    if (!room) return { error: "Tap inside one of the rooms." };
+    if (kind === "climate") {
+      const b = bbox(roomPoints(room)), gaps = [["n", y - b.y0, x, b.x0, b.x1], ["s", b.y1 - y, x, b.x0, b.x1], ["w", x - b.x0, y, b.y0, b.y1], ["e", b.x1 - x, y, b.y0, b.y1]].sort((p, r) => p[1] - r[1]);
+      const [wall, gap, along, lo, hi] = gaps[0];
+      if (gap <= 0.8) return { room: room.id, wall, at: round(Math.min(hi - 0.55, Math.max(lo + 0.55, along))) };
+    }
+    return { x: round(x), y: round(y) };
+  }
+  _place(kind, x, y) {
+    const now = this._floorNow(), pos = this._where(kind, x, y);
+    if (pos.error) { this._tell("Not there", pos.error, "oops", true); return; }
+    const w = now.w, room = pos.room ? (now.f.rooms || []).find((r) => r.id === pos.room) : w.roomAt(pos.x, pos.y);
+    const label = ADD.find((a) => a[0] === kind)[1].toLowerCase(), where = room && room.name ? room.name : "Outside";
+    const names = new Set(this._house.floors.flatMap((f) => (f.devices || []).map((d) => d.name)));
+    let name = `${where} ${label}`, n = 2;
+    while (names.has(name)) name = `${where} ${label} ${n++}`;
+    const ids = new Set([...this._fileIds, ...Object.keys(this._config.devices || {})]);
+    let id = `added_${slug(name)}`, k = 2;
+    while (ids.has(id)) id = `added_${slug(name)}_${k++}`;
+    this._arm = null;
+    this._sel = id;
+    this._fire({ ...this._config, devices: { ...(this._config.devices || {}), [id]: { floor: now.f.id, kind, name, ...pos } } });
+    this._selBox();
+    this._tell(`${name} added!`, `Now pick its real device in the list below. To see it in 3D, switch the card to ${now.f.name || "that floor"}.`, "party");
+  }
+  _move(id, x, y) {
+    const hit = this._find(id);
+    if (!hit) return;
+    const pos = this._where(hit.d.kind, x, y);
+    if (pos.error) { this._tell("Not there", pos.error, "oops", true); this._plan(); return; }
+    const over = { ...(this._config.devices || {}) }, entry = { ...(over[id] || {}) };
+    for (const key of POSITION) delete entry[key];
+    over[id] = { ...entry, ...pos };
+    this._sel = id;
+    this._fire({ ...this._config, devices: over });
+    this._selBox();
+    this._tell("Moved", `${hit.d.name || "It"} is in its new place.`, "happy");
+  }
+  _remove(id) {
+    const hit = id ? this._find(id) : null;
+    if (!hit) return;
+    const over = { ...(this._config.devices || {}) }, links = { ...(this._config.entities || {}) };
+    if (this._fileIds.has(id)) over[id] = null;
+    else delete over[id];
+    delete links[id];
+    this._sel = null;
+    this._fire({ ...this._config, devices: over, entities: links });
+    this._selBox();
+    this._tell("Removed", this._fileIds.has(id) ? `${hit.d.name || "It"} is hidden. "Put them back" under the plan brings it back.` : `${hit.d.name || "It"} is gone.`, "happy");
+  }
+  _rename(id, name) {
+    const hit = id ? this._find(id) : null;
+    name = (name || "").trim();
+    if (!hit || !name || name === hit.d.name) return;
+    const over = { ...(this._config.devices || {}) };
+    over[id] = { ...(over[id] || {}), name };
+    this._fire({ ...this._config, devices: over });
+    this._selBox();
   }
 }
 

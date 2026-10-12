@@ -19,3 +19,39 @@ export function nameDevices(layout) {
   }
   return layout;
 }
+
+const POSITION = ["x", "y", "room", "wall", "at"];
+/* Lay the card's own "devices" setting over the house file.
+   overlay: { id: {...} | null }. A new id adds a device (it says which floor). An id from the file
+   changes that device (a move replaces its whole position). null hides a device from the file.
+   File devices are named first, so their ids never shift whatever is added. */
+export function applyOverlay(layout, overlay) {
+  const floors = layout.floors || [];
+  floors.forEach((f, i) => { f.id = f.id || `floor${i}`; });
+  nameDevices(layout);
+  if (!overlay || typeof overlay !== "object" || Array.isArray(overlay)) return layout;
+  for (const [id, entry] of Object.entries(overlay)) {
+    let at = null;
+    for (const f of floors) {
+      const i = (f.devices || []).findIndex((d) => d.id === id);
+      if (i >= 0) { at = { f, i }; break; }
+    }
+    if (entry === null) {
+      if (at) at.f.devices.splice(at.i, 1);
+      continue;
+    }
+    if (!entry || typeof entry !== "object") continue;
+    const { floor, ...rest } = entry;
+    if (at) {
+      const cur = at.f.devices[at.i];
+      if (POSITION.some((k) => rest[k] != null)) for (const k of POSITION) delete cur[k];
+      Object.assign(cur, rest);
+      const to = floor && floor !== at.f.id ? floors.find((f) => f.id === floor) : null;
+      if (to) { at.f.devices.splice(at.i, 1); (to.devices = to.devices || []).push(cur); }
+    } else if (rest.kind) {
+      const to = floors.find((f) => f.id === floor) || floors[0];
+      if (to) (to.devices = to.devices || []).push({ id, entity: null, ...rest });
+    }
+  }
+  return layout;
+}

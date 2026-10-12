@@ -127,6 +127,15 @@ devices:
 
 You can leave `entity` as `null` in the file and connect devices in the card editor instead. Those links are kept in the card's settings (`entities`), not in this file.
 
+You can also add and move devices in the card editor by tapping a plan of the floor. Those are kept in the card's settings too, under `devices`:
+
+```yaml
+devices:
+  added_kitchen_light: { floor: ground, kind: light, name: Kitchen light, x: 7.5, y: 2.4 }   # added
+  hall_radiator: { room: hall, wall: e, at: 6.2 }                                            # moved
+  old_sensor: null                                                                           # hidden
+```
+
 A `cover` on a wall is attached to the window, patio door or garage door at that position. Its slats follow the entity's `current_position`.
 
 ## Roofs

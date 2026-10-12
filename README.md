@@ -114,11 +114,14 @@ Edit the card on your dashboard and you get a cartoon editor instead of a box of
 
 - **Your house**: point at a house file, or load one straight into the card so there is nothing to copy onto the server.
 - **The look**: cartoon or brick colours, which view opens first, the name and the height.
+- **Add or move things**: pick a sticker (light, blind, radiator, lock, camera...) and tap the little plan where it goes. Blinds snap onto the nearest window and radiators onto the nearest wall. Drag anything to move it.
 - **Connect your things**: every light, blind, radiator and sensor in the house is listed by floor. Pick the real Home Assistant device for each one. Grey ones are not connected yet.
+
+![Adding things by tapping the plan](docs/img/editor-plan.png)
 
 ![Connecting devices](docs/img/editor-devices.png)
 
-The links you make are saved in the card's own settings, so they survive when you rebuild the house file. You can try the editor on the [demo page](https://digitaladaption.github.io/toon-house-card/demo/?editor).
+What you add, move and connect is saved in the card's own settings, not in the house file, so it survives when you rebuild the house file. You can try the editor on the [demo page](https://digitaladaption.github.io/toon-house-card/demo/?editor).
 
 ## Card options
 
@@ -132,6 +135,7 @@ The links you make are saved in the card's own settings, so they survive when yo
 | `height` | fills the screen | Card height, for example `600` or `70vh` |
 | `cut_height` | `1.2` | How high the walls are cut in the floor views, in metres |
 | `entities` | | Links made in the editor: device id to entity, for example `{ kitchen_light: light.kitchen }`. They win over the house file. `null` forces a device back to grey |
+| `devices` | | Things added or moved in the editor, by device id. A new id adds a device (with its `floor`); an id from the house file changes that one; `null` hides it |
 | `planned_path` | | A dashboard path to open when a planned (grey) device is tapped |
 
 ## Devices

@@ -9,11 +9,11 @@ import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js
 import { floorWalls, faceWithCutouts, bbox, roomPoints, uncovered, EXT_WALL } from "./geometry.js";
 import { resolveTheme, roomStyle, drawPattern, PATTERN_SIZE } from "./theme.js";
 import { furnitureParts } from "./furniture.js";
-import { nameDevices } from "./layout.js";
+import { applyOverlay } from "./layout.js";
 import { ensureFont, FONT } from "./font.js";
 import "./editor.js";
 
-const VERSION = "0.4.0";
+const VERSION = "0.5.0";
 const SILL = 0.9, HEAD = 2.1, DOOR_HEAD = 2.05, GAP = 0.2;
 const tex = (pattern, a, b) => `tex|${pattern}|${a}|${b || ""}`;
 const esc = (s) => String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/"/g, "&quot;");
@@ -81,10 +81,18 @@ class ToonHouseCard extends HTMLElement {
     }
     if (this._config.height) this.style.setProperty("--toon-house-h", typeof this._config.height === "number" ? `${this._config.height}px` : this._config.height);
     else this.style.removeProperty("--toon-house-h");
-    // Only read the house again when the house itself changed. Linking a device or changing the title
-    // (which the editor does on every edit) must not rebuild the whole scene.
-    const key = JSON.stringify([this._config.layout, this._config.theme || null, this._config.colours || null, this._config.cut_height]);
-    if (key === this._layoutKey && this._floors) {
+    // Three sizes of change, so the editor stays quick and the camera stays put:
+    //  - the house itself (file, theme, colours): read it again and start afresh
+    //  - devices added or moved in the editor: rebuild from the copy already held, keeping the view
+    //  - a link, the title or the height: just refresh what is drawn
+    const srcKey = JSON.stringify([this._config.layout, this._config.theme || null, this._config.colours || null, this._config.cut_height]);
+    const overKey = JSON.stringify(this._config.devices || null);
+    if (srcKey === this._srcKey && this._raw && this._floors) {
+      if (overKey !== this._overKey) {
+        this._overKey = overKey;
+        this._rebuild(newView);
+        return;
+      }
       this._applyEntities();
       this._header();
       if (newView) {
@@ -97,7 +105,8 @@ class ToonHouseCard extends HTMLElement {
       }
       return;
     }
-    this._layoutKey = key;
+    this._srcKey = srcKey;
+    this._overKey = overKey;
     this._loadLayout();
   }
   getCardSize() {
@@ -159,20 +168,37 @@ class ToonHouseCard extends HTMLElement {
     this.shadowRoot.querySelector(".warn").addEventListener("click", () => this._say(`Check your house file:\n- ${this._warnings.join("\n- ")}`, "", 20000));
   }
   async _loadLayout() {
-    const src = this._config.layout;
+    const src = this._config.layout, asked = this._srcKey;
     if (this._failed) { this._failed = false; this._dom(); }
     try {
+      let house = src;
       if (typeof src === "string") {
         const r = await fetch(`${src}${src.includes("?") ? "&" : "?"}v=${Date.now()}`);
         if (!r.ok) throw new Error(`the server answered ${r.status}`);
-        this._layout = await r.json();
-      } else this._layout = JSON.parse(JSON.stringify(src));
+        house = await r.json();
+      }
+      if (asked !== this._srcKey) return; // a newer setting arrived while this one was loading
+      // _prepare changes the house it is given, so an untouched copy is kept to rebuild from
+      this._raw = JSON.stringify(house);
+      this._layout = JSON.parse(this._raw);
       this._prepare();
     } catch (e) {
       this._fail(`Could not read the house file${typeof src === "string" ? ` at ${src}` : ""}: ${e.message}`);
       return;
     }
     if (this._renderer) this._build(true);
+    else this._ensure();
+  }
+  // devices were added, moved or removed in the editor: same house, same view
+  _rebuild(resetView) {
+    try {
+      this._layout = JSON.parse(this._raw);
+      this._prepare();
+    } catch (e) {
+      this._fail(`Something is wrong with the devices in the card settings: ${e.message}`);
+      return;
+    }
+    if (this._renderer) this._build(!!resetView);
     else this._ensure();
   }
   // fill in defaults and work out the walls once
@@ -183,7 +209,7 @@ class ToonHouseCard extends HTMLElement {
     this._H = L.storey_height || 2.4;
     this._warnings = [];
     let bed = 0;
-    nameDevices(L);
+    applyOverlay(L, this._config.devices);
     this._floors = L.floors.map((f, i) => {
       f.id = f.id || `floor${i}`;
       f.name = f.name || (i === 0 ? "Ground" : i === 1 ? "Upstairs" : `Floor ${i}`);
@@ -250,7 +276,8 @@ class ToonHouseCard extends HTMLElement {
     // remember, so the next good setting (a corrected file address, say) starts from a clean card
     this._failed = true;
     this._floors = null;
-    this._layoutKey = null;
+    this._srcKey = null;
+    this._raw = null;
     this._teardown();
     this._wrap.innerHTML = `<div class="err">${esc(msg)}</div>`;
   }
