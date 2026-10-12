@@ -9,6 +9,7 @@ import { ensureFont, FONT } from "./font.js";
 import { THEMES, resolveTheme, roomStyle } from "./theme.js";
 import { stateText } from "./match.js";
 import { Setup, SETUP_STYLE } from "./setup.js";
+import { Fill, FILL_STYLE } from "./fill.js";
 
 const IMPORTER = "https://digitaladaption.github.io/toon-house-card/importer/";
 const KIND_NAME = { light: "Light", switch: "Switch", cover: "Blind or shutter", climate: "Heating", lock: "Lock", motion: "Motion sensor", contact: "Door or window sensor", camera: "Camera", speaker: "Speaker", tv: "TV", sensor: "Sensor" };
@@ -76,7 +77,7 @@ const STYLE = `
   .tabs .btn{min-height:40px;padding:4px 12px;font-size:14px}
   .dev.sel{background:#FFF3B8}
   .slider input{flex:1}
-${SETUP_STYLE}`;
+${SETUP_STYLE}${FILL_STYLE}`;
 
 class ToonHouseCardEditor extends HTMLElement {
   setConfig(config) {
@@ -86,6 +87,7 @@ class ToonHouseCardEditor extends HTMLElement {
       this.attachShadow({ mode: "open" });
       this._skeleton();
       this._setup = new Setup(this);
+      this._fill = new Fill(this);
     }
     this._loadHouse();
     this._overlayChanged();
@@ -118,7 +120,7 @@ class ToonHouseCardEditor extends HTMLElement {
     // tidy: no empty leftovers in the saved settings
     if (config.entities && !Object.keys(config.entities).length) delete config.entities;
     if (config.devices && !Object.keys(config.devices).length) delete config.devices;
-    for (const k of ["title", "theme", "height", "weather"]) if (config[k] === "" || config[k] == null) delete config[k];
+    for (const k of ["title", "theme", "height", "weather", "quality"]) if (config[k] === "" || config[k] == null) delete config[k];
     this._config = config;
     this.dispatchEvent(new CustomEvent("config-changed", { detail: { config }, bubbles: true, composed: true }));
     this._overlayChanged();
@@ -179,6 +181,9 @@ class ToonHouseCardEditor extends HTMLElement {
         <label class="f">Weather outside</label>
         <div class="row" id="wxs"></div>
         <p class="hint" id="wxHint"></p>
+        <label class="f">Detail</label>
+        <div class="row" id="gfx"><button class="btn" data-q="auto">Auto</button><button class="btn" data-q="full">Full</button><button class="btn" data-q="light">Light</button></div>
+        <p class="hint">Light is for older tablets: softer edges, and less rain and snow. Auto switches to it if the card starts to stutter.</p>
         <label class="f">Height</label>
         <div class="row"><button class="btn" id="fill">Fill the screen</button><button class="btn" id="fixed">Set a height</button></div>
         <div class="slider" id="hBox"><input id="height" type="range" min="300" max="1000" step="20" aria-label="Card height"><span class="pill" id="hVal"></span></div>
@@ -187,6 +192,7 @@ class ToonHouseCardEditor extends HTMLElement {
       <section>
         <h3>${ICON.pin}Add or move things</h3>
         <p class="hint">Pick a sticker, then tap the plan where it goes. Tap anything on the plan to set it up, or drag it to move it.</p>
+        <div class="row"><button class="btn" id="fillBtn">${ICON.house}Find my things by room</button></div>
         <div class="kinds" id="kinds"></div>
         <div class="row tabs" id="ptabs"></div>
         <div id="planBox"><svg id="plan" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Plan of this floor"></svg></div>
@@ -221,6 +227,7 @@ class ToonHouseCardEditor extends HTMLElement {
       e.target.value = "";
     });
     this.shadowRoot.querySelectorAll("[data-theme]").forEach((b) => b.addEventListener("click", () => this._set("theme", b.dataset.theme)));
+    this.shadowRoot.querySelectorAll("[data-q]").forEach((b) => b.addEventListener("click", () => this._set("quality", b.dataset.q === "auto" ? null : b.dataset.q)));
     q("#title").addEventListener("change", (e) => this._set("title", e.target.value));
     q("#fill").addEventListener("click", () => this._set("height", null));
     q("#fixed").addEventListener("click", () => this._set("height", 520));
@@ -239,6 +246,7 @@ class ToonHouseCardEditor extends HTMLElement {
       for (const k of Object.keys(over)) if (over[k] === null) delete over[k];
       this._fire({ ...this._config, devices: over });
     });
+    q("#fillBtn").addEventListener("click", () => this._fill.open());
     const svg = q("#plan");
     svg.addEventListener("pointerdown", (e) => {
       const pin = e.target.closest ? e.target.closest(".pin") : null;
@@ -344,6 +352,7 @@ class ToonHouseCardEditor extends HTMLElement {
     const theme = c.theme || (h && h.theme) || "toon";
     this.shadowRoot.querySelectorAll("[data-theme]").forEach((b) => b.classList.toggle("on", b.dataset.theme === theme));
     if (active !== q("#title")) { q("#title").value = c.title != null ? c.title : ""; q("#title").placeholder = (h && h.title) || "My house"; }
+    this.shadowRoot.querySelectorAll("[data-q]").forEach((b) => b.classList.toggle("on", b.dataset.q === (c.quality || "auto")));
     const fixed = typeof c.height === "number";
     q("#fill").classList.toggle("on", !c.height);
     q("#fixed").classList.toggle("on", !!c.height);
@@ -593,8 +602,8 @@ class ToonHouseCardEditor extends HTMLElement {
     else { this._hold = 0; this._talk(); }
   }
   // where a thing of this kind belongs when the plan is tapped at x, y
-  _where(kind, x, y) {
-    const now = this._floorNow(), w = now && now.w;
+  _where(kind, x, y, fi) {
+    const w = fi != null ? this._fw[fi] : (this._floorNow() || {}).w;
     if (!w) return { error: "I can't read this floor's walls, so I can't place things on it." };
     const round = (v) => Math.round(v * 20) / 20, room = w.roomAt(x, y);
     const nearest = (kinds) => {
@@ -667,6 +676,81 @@ class ToonHouseCardEditor extends HTMLElement {
     this._fire({ ...this._config, devices: over, entities: links });
     this._selBox();
     this._tell("Removed", this._fileIds.has(id) ? `${hit.d.name || "It"} is hidden. "Put them back" under the plan brings it back.` : `${hit.d.name || "It"} is gone.`, "happy");
+  }
+  /* Put things found in Home Assistant's areas onto the plan, connected.
+     picked: [{ id (entity), name, kind, fi (floor), room (id) }] */
+  _fillRooms(picked) {
+    const over = { ...(this._config.devices || {}) }, links = { ...(this._config.entities || {}) };
+    const ids = new Set([...this._fileIds, ...Object.keys(over)]), seen = {}, missed = [];
+    let added = 0, joined = 0;
+    const grey = new Set();
+    // openings that already have something of this kind on them
+    const taken = { cover: new Set(), contact: new Set(), lock: new Set() };
+    this._house.floors.forEach((f, fi) => (f.devices || []).forEach((d) => { if (taken[d.kind] && d.room) taken[d.kind].add(`${fi}|${d.room}|${d.wall}|${Math.round(d.at * 2)}`); }));
+    for (const t of picked) {
+      const f = this._house.floors[t.fi], w = this._fw[t.fi], room = (f.rooms || []).find((r) => r.id === t.room);
+      if (!w || !room) { missed.push(t.name); continue; }
+      // a grey thing of this kind already waiting in the room is connected, not doubled
+      const waiting = (f.devices || []).find((d) => d.kind === t.kind && !grey.has(d.id) && !this._entityOf(d) && (d.room ? d.room === room.id : d.x != null && (w.roomAt(d.x, d.y) || {}).id === room.id));
+      if (waiting) { grey.add(waiting.id); links[waiting.id] = t.id; joined++; continue; }
+      const n = (seen[`${t.fi}|${t.room}|${t.kind}`] = (seen[`${t.fi}|${t.room}|${t.kind}`] || 0) + 1) - 1;
+      const pos = this._autoSpot(t.kind, t.fi, room, w, n, taken);
+      if (!pos) { missed.push(t.name); continue; }
+      let id = `added_${slug(t.name)}`, k = 2;
+      while (ids.has(id)) id = `added_${slug(t.name)}_${k++}`;
+      ids.add(id);
+      over[id] = { floor: f.id, kind: t.kind, name: t.name, ...pos };
+      links[id] = t.id;
+      added++;
+    }
+    if (added || joined) this._fire({ ...this._config, devices: over, entities: links });
+    this._states();
+    const tail = missed.length ? ` I couldn't find a spot for ${missed.slice(0, 3).join(", ")}${missed.length > 3 ? ` and ${missed.length - 3} more` : ""}: add ${missed.length === 1 ? "it" : "them"} with a sticker.` : " Drag any of them to the right spot.";
+    const did = [added ? `${added} added to the plan` : "", joined ? `${joined} connected to grey ones that were waiting` : ""].filter(Boolean).join(", ");
+    this._tell(added + joined ? `${added + joined} thing${added + joined === 1 ? "" : "s"} sorted!` : "Nothing added", `${did ? `${did[0].toUpperCase()}${did.slice(1)}.` : ""}${tail}`, added + joined ? "party" : "oops", !(added + joined));
+  }
+  // a sensible place in a room for the nth thing of a kind, or null
+  _autoSpot(kind, fi, room, w, n, taken) {
+    const b = bbox(roomPoints(room)), round = (v) => Math.round(v * 20) / 20, inRoom = (x, y) => { const r = w.roomAt(x, y); return !!r && r.id === room.id; };
+    let cx = (b.x0 + b.x1) / 2, cy = (b.y0 + b.y1) / 2;
+    if (!inRoom(cx, cy)) {
+      const pts = roomPoints(room), alt = room.label || [pts.reduce((a, p) => a + p[0], 0) / pts.length, pts.reduce((a, p) => a + p[1], 0) / pts.length];
+      if (!inRoom(alt[0], alt[1])) return null;
+      [cx, cy] = alt;
+    }
+    const opening = (kinds, set) => {
+      for (const want of kinds) for (const o of w.openings) {
+        if (o.kind !== want || o.room !== room.id) continue;
+        const at = round(o.at + o.width / 2), key = `${fi}|${o.room}|${o.wall}|${Math.round(at * 2)}`;
+        if (set.has(key)) continue;
+        set.add(key);
+        return { o, at };
+      }
+      return null;
+    };
+    if (kind === "cover") { const h = opening(["window", "bifold", "garage"], taken.cover); return h ? { room: room.id, wall: h.o.wall, at: h.at } : null; }
+    if (kind === "contact") { const h = opening(["frontdoor", "extdoor", "bifold", "garage", "door", "window"], taken.contact); return h ? { room: room.id, wall: h.o.wall, at: h.at } : null; }
+    if (kind === "lock") {
+      const h = opening(["frontdoor", "extdoor", "garage"], taken.lock);
+      if (!h) return null;
+      const [x0, y0, x1, y1] = h.o.b;
+      return { x: round((x0 + x1) / 2 - h.o.n[0] * 0.3), y: round((y0 + y1) / 2 - h.o.n[1] * 0.3) };
+    }
+    const wide = b.x1 - b.x0 >= b.y1 - b.y0, m = 0.45;
+    const corners = [[b.x0 + m, b.y0 + m], [b.x1 - m, b.y0 + m], [b.x1 - m, b.y1 - m], [b.x0 + m, b.y1 - m]];
+    const walls = [["w", b.x0, cy], ["e", b.x1, cy], ["n", cx, b.y0], ["s", cx, b.y1]];
+    let p;
+    if (kind === "light") { const t = [0, -0.25, 0.25, -0.4, 0.4][n % 5]; p = wide ? [cx + t * (b.x1 - b.x0), cy] : [cx, cy + t * (b.y1 - b.y0)]; }
+    else if (kind === "climate") {
+      const [wall, edge, mid] = [walls[n % 4][0], walls[n % 4][1], walls[n % 4][2]];
+      const horiz = wall === "n" || wall === "s", lo = horiz ? b.x0 : b.y0, hi = horiz ? b.x1 : b.y1;
+      return hi - lo > 1.3 ? { room: room.id, wall, at: round(Math.min(hi - 0.6, Math.max(lo + 0.6, horiz ? cx : cy))) } : { x: round(cx), y: round(cy) };
+    } else if (kind === "tv") p = [cx, b.y0 + 0.35];
+    else if (kind === "motion" || kind === "camera") p = corners[n % 4];
+    else if (kind === "speaker") p = corners[(n + 1) % 4];
+    else p = [b.x0 + m + ((n % 4) + 1) * ((b.x1 - b.x0 - 2 * m) / 5), b.y1 - m];
+    if (!inRoom(p[0], p[1])) p = [cx + (n % 3) * 0.3, cy + 0.3];
+    return inRoom(p[0], p[1]) ? { x: round(p[0]), y: round(p[1]) } : null;
   }
   _rename(id, name) {
     const hit = id ? this._find(id) : null;

@@ -11,10 +11,12 @@ import { resolveTheme, roomStyle, drawPattern, PATTERN_SIZE } from "./theme.js";
 import { furnitureParts } from "./furniture.js";
 import { applyOverlay } from "./layout.js";
 import { ensureFont, FONT } from "./font.js";
+import { RoomPanel, ROOM_STYLE } from "./room.js";
+import { Replay, REPLAY_STYLE } from "./replay.js";
 import { Weather, readWeather, weatherKey, tintTheme, tintKey } from "./weather.js";
 import "./editor.js";
 
-const VERSION = "0.7.0";
+const VERSION = "0.8.0";
 const SILL = 0.9, HEAD = 2.1, DOOR_HEAD = 2.05, GAP = 0.2;
 const tex = (pattern, a, b) => `tex|${pattern}|${a}|${b || ""}`;
 const esc = (s) => String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/"/g, "&quot;");
@@ -96,6 +98,8 @@ class ToonHouseCard extends HTMLElement {
       }
       this._applyEntities();
       this._header();
+      // a change of detail needs a fresh canvas
+      if (this._renderer && (this._config.quality || "auto") !== this._gfx) { this._autoLow = false; this._teardown(); this._ensure(); return; }
       if (!newView && this._weatherCheck()) return;
       if (newView) {
         this._pickMode();
@@ -115,7 +119,16 @@ class ToonHouseCard extends HTMLElement {
     return 12;
   }
   set hass(hass) {
+    this._live = hass;
+    const b = this.shadowRoot && this.shadowRoot.querySelector(".rp");
+    if (b) b.style.display = hass && hass.callWS && this._config.replay !== false ? "" : "none";
+    // while the past is on show, the present waits
+    if (this._replay && this._replay.on) return;
     this._hass = hass;
+    this._hassChanged();
+  }
+  _hassChanged() {
+    if (this._room) this._room.refresh();
     if (!this._devs) return;
     if (this._weatherCheck()) return;
     const sig = this._signature();
@@ -131,6 +144,7 @@ class ToonHouseCard extends HTMLElement {
   }
   disconnectedCallback() {
     this._connected = false;
+    if (this._replay) this._replay.stop();
     this._teardown();
   }
 
@@ -139,7 +153,7 @@ class ToonHouseCard extends HTMLElement {
       :host{display:block}
       ha-card{position:relative;overflow:hidden;font-family:${FONT};font-weight:500;color:#1b1b1b}
       .wrap{position:relative;height:var(--toon-house-h,calc(100vh - 60px));min-height:var(--toon-house-min-h,380px)}
-      canvas{display:block;width:100%;height:100%;touch-action:none;outline:none}
+      canvas{display:block;width:100%;height:100%;touch-action:none;outline:none;-webkit-touch-callout:none;-webkit-user-select:none;user-select:none}
       .bar{position:absolute;left:12px;top:10px;right:12px;display:flex;gap:8px;flex-wrap:wrap;align-items:center;pointer-events:none}
       h1{margin:0 8px 0 0;font-size:22px;font-weight:900;text-shadow:0 0 4px #fff,0 0 4px #fff}
       button{pointer-events:auto;font:inherit;font-weight:800;font-size:14px;padding:7px 12px;border:3px solid #1b1b1b;border-radius:12px;background:#fff;color:#1b1b1b;cursor:pointer;box-shadow:2px 3px 0 #1b1b1b}
@@ -153,13 +167,14 @@ class ToonHouseCard extends HTMLElement {
       .toast{position:absolute;left:50%;bottom:44px;transform:translateX(-50%);padding:8px 14px;border:3px solid #1b1b1b;border-radius:12px;background:#fff;font-weight:800;font-size:14px;box-shadow:2px 3px 0 #1b1b1b;display:none;pointer-events:auto;cursor:pointer;max-width:86%;text-align:left;white-space:pre-line}
       .foot{position:absolute;left:12px;bottom:8px;right:12px;font-size:12px;font-weight:700;text-shadow:0 0 3px #fff,0 0 3px #fff;pointer-events:none;display:flex;gap:14px;flex-wrap:wrap}
       .err{padding:18px;background:#fff;white-space:pre-line}
+      ${ROOM_STYLE}${REPLAY_STYLE}
       @media (max-width:600px){.rl{font-size:11px}.chip{font-size:11px;padding:1px 5px}h1{font-size:19px}.foot span+span{display:none}button{font-size:13px;padding:6px 9px}}
     </style>
     <ha-card><div class="wrap">
       <div class="labels"></div>
-      <div class="bar"><h1></h1><span class="modes" style="display:contents"></span><span class="wx" style="display:none"></span><button class="warn" style="display:none">!</button></div>
+      <div class="bar"><h1></h1><span class="modes" style="display:contents"></span><span class="wx" style="display:none"></span><button class="rp" style="display:none" title="See the last day again">Replay</button><button class="warn" style="display:none">!</button></div>
       <div class="toast"></div>
-      <div class="foot"><span class="counts"></span><span>Drag to turn, pinch or scroll to zoom. Tap a device.</span></div>
+      <div class="foot"><span class="counts"></span><span>Drag to turn, pinch or scroll to zoom. Tap a device or a room. Hold a device for more.</span></div>
     </div></ha-card>`;
     this._wrap = this.shadowRoot.querySelector(".wrap");
     this._labels = this.shadowRoot.querySelector(".labels");
@@ -169,6 +184,9 @@ class ToonHouseCard extends HTMLElement {
       this._toast.style.display = "none";
       if (nav) this._navigate(nav);
     });
+    this._room = new RoomPanel(this);
+    this._replay = new Replay(this);
+    this.shadowRoot.querySelector(".rp").addEventListener("click", () => (this._replay.on ? this._replay.stop() : this._replay.start()));
     this.shadowRoot.querySelector(".warn").addEventListener("click", () => this._say(`Check your house file:\n- ${this._warnings.join("\n- ")}`, "", 20000));
   }
   async _loadLayout() {
@@ -290,13 +308,15 @@ class ToonHouseCard extends HTMLElement {
     if (!this._connected || !this._layout || !this._floors || this._renderer) return;
     let renderer;
     try {
-      renderer = new T.WebGLRenderer({ antialias: true, alpha: false, powerPreference: "low-power" });
+      this._gfx = this._config.quality || "auto";
+      renderer = new T.WebGLRenderer({ antialias: this._gfx !== "light", alpha: false, powerPreference: "low-power" });
     } catch (e) {
       this._fail("This browser could not start 3D graphics (WebGL2), so the house cannot be drawn here.");
       return;
     }
     this._renderer = renderer;
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.5));
+    renderer.setPixelRatio(this._low() ? 1 : Math.min(window.devicePixelRatio || 1, 1.5));
+    this._slow = 0;
     this._wrap.insertBefore(renderer.domElement, this._wrap.firstChild);
     this._scene = new T.Scene();
     this._camera = new T.PerspectiveCamera(32, 1, 0.5, 600);
@@ -321,13 +341,33 @@ class ToonHouseCard extends HTMLElement {
       this._req();
     });
     const el = renderer.domElement;
-    this._onDown = (e) => { this._down = [e.clientX, e.clientY]; };
+    this._onDown = (e) => {
+      this._down = [e.clientX, e.clientY];
+      this._at = [e.clientX, e.clientY];
+      this._held = false;
+      clearTimeout(this._holdT);
+      // holding still on a device opens its full controls (colour, and so on)
+      this._holdT = setTimeout(() => {
+        if (!this._down || Math.hypot(this._at[0] - this._down[0], this._at[1] - this._down[1]) >= 6) return;
+        const dev = this._deviceAt(this._down[0], this._down[1]);
+        if (!dev || !dev.d.entity) return;
+        this._held = true;
+        this._toast.style.display = "none";
+        this.dispatchEvent(new CustomEvent("hass-more-info", { bubbles: true, composed: true, detail: { entityId: dev.d.entity } }));
+      }, 550);
+    };
+    this._onMove = (e) => { if (this._down) this._at = [e.clientX, e.clientY]; };
     this._onUp = (e) => {
-      if (this._down && Math.hypot(e.clientX - this._down[0], e.clientY - this._down[1]) < 6) this._pick(e.clientX, e.clientY);
+      clearTimeout(this._holdT);
+      if (this._down && !this._held && Math.hypot(e.clientX - this._down[0], e.clientY - this._down[1]) < 6) this._pick(e.clientX, e.clientY);
       this._down = null;
     };
+    this._onMenu = (e) => { if (this._held || this._down) e.preventDefault(); };
     el.addEventListener("pointerdown", this._onDown);
+    el.addEventListener("pointermove", this._onMove);
     el.addEventListener("pointerup", this._onUp);
+    el.addEventListener("pointercancel", this._onUp);
+    el.addEventListener("contextmenu", this._onMenu);
     this._ro = new ResizeObserver(() => this._resize());
     this._ro.observe(this._wrap);
     this._resize();
@@ -348,8 +388,12 @@ class ToonHouseCard extends HTMLElement {
     this._wx = null;
     if (this._renderer) {
       const el = this._renderer.domElement;
+      clearTimeout(this._holdT);
       el.removeEventListener("pointerdown", this._onDown);
+      el.removeEventListener("pointermove", this._onMove);
       el.removeEventListener("pointerup", this._onUp);
+      el.removeEventListener("pointercancel", this._onUp);
+      el.removeEventListener("contextmenu", this._onMenu);
       this._renderer.dispose();
       this._renderer.forceContextLoss();
       el.remove();
@@ -521,6 +565,11 @@ class ToonHouseCard extends HTMLElement {
     const root = (this._root = new T.Group());
     this._scene.add(root);
     this._devs = [];
+    // the room panel follows the house: it shuts if its floor is no longer the one on show
+    if (this._room && this._room.isOpen) {
+      const F = typeof mode === "number" ? this._floors[mode] : null, room = F && this._room.key === `${F.floor.id}|${this._room.roomId}` ? F.floor.rooms.find((r) => r.id === this._room.roomId) : null;
+      if (room) this._room.open(F, room); else this._room.close();
+    }
     this._pickables = [];
     this._roomLabels = [];
     this._tweens = [];
@@ -538,6 +587,10 @@ class ToonHouseCard extends HTMLElement {
     this._applyWeather(sky.w);
     this._req();
   }
+  // light detail: asked for in the settings, or switched to because rain or snow was making the card stutter
+  _low() {
+    return this._gfx === "light" || (this._gfx === "auto" && !!this._autoLow);
+  }
   // ---------- weather ----------
   _weather() {
     const w = readWeather(this._hass, this._config);
@@ -549,7 +602,7 @@ class ToonHouseCard extends HTMLElement {
     if (!this._wx || !this._root) return;
     const P = this._plot, far = Math.max(P.x1 - P.x0, P.front - P.back);
     this._wxKey = weatherKey(w);
-    this._wx.apply(w, { theme: this.theme, box: { cx: (P.x0 + P.x1) / 2, cz: (P.back + P.front) / 2, far }, whole: this._mode === "whole", clouds: this._cloudMats, sunBall: this._sunBall, sunMat: this._sunMat, dist: this._camera.position.distanceTo(this._controls.target) || this._dist });
+    this._wx.apply(w, { theme: this.theme, box: { cx: (P.x0 + P.x1) / 2, cz: (P.back + P.front) / 2, far }, whole: this._mode === "whole", low: this._low(), clouds: this._cloudMats, sunBall: this._sunBall, sunMat: this._sunMat, dist: this._camera.position.distanceTo(this._controls.target) || this._dist });
     this.shadowRoot.querySelector("ha-card").style.background = `#${this._scene.background.getHexString()}`;
     const chip = this.shadowRoot.querySelector(".wx"), text = w ? [w.text, w.temp].filter(Boolean).join(" ") : "";
     chip.textContent = text;
@@ -1137,14 +1190,32 @@ class ToonHouseCard extends HTMLElement {
   }
 
   // ---------- interaction ----------
-  _pick(clientX, clientY) {
+  _ray(clientX, clientY) {
     const r = this._renderer.domElement.getBoundingClientRect();
     const p = new T.Vector2(((clientX - r.left) / r.width) * 2 - 1, -((clientY - r.top) / r.height) * 2 + 1);
     const rc = new T.Raycaster();
     rc.setFromCamera(p, this._camera);
-    const hit = rc.intersectObjects(this._pickables, false)[0];
-    if (hit) this._tap(hit.object.userData.dev);
-    else this._toast.style.display = "none";
+    return rc;
+  }
+  _deviceAt(clientX, clientY) {
+    const hit = this._ray(clientX, clientY).intersectObjects(this._pickables, false)[0];
+    return hit ? hit.object.userData.dev : null;
+  }
+  // the room under a tap, in a floor view: { F, room } or null
+  _roomAt(clientX, clientY) {
+    const F = typeof this._mode === "number" ? this._floors[this._mode] : null;
+    if (!F) return null;
+    const p = this._ray(clientX, clientY).ray.intersectPlane(new T.Plane(new T.Vector3(0, 1, 0), -F.baseY), new T.Vector3());
+    const room = p ? F.walls.roomAt(p.x - F.off[0], p.z - F.off[1]) : null;
+    return room ? { F, room } : null;
+  }
+  _pick(clientX, clientY) {
+    const dev = this._deviceAt(clientX, clientY);
+    if (dev) { this._tap(dev); return; }
+    this._toast.style.display = "none";
+    const at = this._roomAt(clientX, clientY);
+    if (at && this._room.key !== `${at.F.floor.id}|${at.room.id}`) this._room.open(at.F, at.room);
+    else this._room.close();
   }
   _tap(dev) {
     const d = dev.d, st = dev.st || devState(d, this._hass);
@@ -1190,7 +1261,17 @@ class ToonHouseCard extends HTMLElement {
       // falling rain and snow: keep drawing, at about 30 pictures a second
       this._req();
       const dt = now - (this._last || 0);
-      if (this._last && dt < 30 && !this._tweens.length) return;
+      if (this._last && dt < (this._low() ? 46 : 30) && !this._tweens.length) return;
+      // if pictures keep arriving slowly, drop to light detail (only when the settings leave it to the card)
+      if (this._gfx === "auto" && !this._autoLow && this._last && dt < 1000) {
+        this._slow = dt > 70 ? this._slow + 1 : Math.max(0, this._slow - 1);
+        if (this._slow > 24) {
+          this._autoLow = true;
+          this._renderer.setPixelRatio(1);
+          this._resize();
+          this._applyWeather(this._weather().w);
+        }
+      }
       this._wx.step(this._last ? Math.min(dt, 100) / 1000 : 0, now);
       this._last = now;
     }

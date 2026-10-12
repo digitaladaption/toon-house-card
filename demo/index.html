@@ -45,13 +45,13 @@
   try { layout = await (await fetch(url)).json(); } catch (e) { /* the card shows the problem */ }
   const states = {};
   let lights = true, heat = true, cover = 40;
-  const temps = {};
+  const temps = {}, dims = {};
   let weather = q.get("weather") || "sunny", night = q.has("night");
   const devices = (layout.floors || []).flatMap((f) => f.devices || []).filter((d) => d.entity);
   function fill() {
     for (const d of devices) {
       const s = { entity_id: d.entity, state: "on", attributes: {} };
-      if (d.kind === "light" || d.kind === "switch") s.state = lights ? "on" : "off";
+      if (d.kind === "light" || d.kind === "switch") { s.state = lights ? "on" : "off"; if (d.entity.startsWith("light.")) s.attributes = { supported_color_modes: ["brightness"], ...(lights ? { brightness: dims[d.entity] != null ? dims[d.entity] : 255 } : {}) }; }
       else if (d.kind === "cover") { s.state = cover > 0 ? "open" : "closed"; s.attributes.current_position = cover; }
       else if (d.kind === "climate") { s.state = "heat"; s.attributes = { current_temperature: 20.5, temperature: temps[d.entity] != null ? temps[d.entity] : 21, hvac_action: heat ? "heating" : "idle" }; }
       else if (d.kind === "lock") s.state = "locked";
@@ -63,19 +63,47 @@
     }
   }
   // a few spare devices, so the editor has something to offer for the grey (planned) ones
-  const SPARE = { "light.office": ["on", "Office light"], "light.spare_lamp": ["off", "Spare lamp"], "cover.nursery_blind": ["open", "Nursery blind"], "climate.main_bedroom": ["heat", "Main bedroom radiator"], "climate.lounge_trv": ["heat", "Lounge TRV"], "sensor.lounge_temperature": ["20.4", "Lounge temperature"], "sensor.lounge_trv_battery": ["88", "Lounge TRV battery"], "binary_sensor.patio_door": ["off", "Patio door"], "media_player.kitchen_speaker": ["playing", "Kitchen speaker"], "sensor.bathroom_humidity": ["61", "Bathroom humidity"] };
-  for (const [id, [state, name]] of Object.entries(SPARE)) states[id] = { entity_id: id, state, attributes: { friendly_name: name, ...(id.startsWith("cover") ? { current_position: 70 } : {}), ...(id.startsWith("climate") ? { current_temperature: 19.5, temperature: 20, hvac_action: "heating" } : {}), ...(id.startsWith("sensor") ? (id.endsWith("temperature") ? { unit_of_measurement: "°C", device_class: "temperature" } : { unit_of_measurement: "%" }) : {}) } };
+  const SPARE = { "light.office": ["on", "Office light"], "light.spare_lamp": ["off", "Spare lamp"], "cover.nursery_blind": ["open", "Nursery blind"], "climate.main_bedroom": ["heat", "Main bedroom radiator"], "climate.lounge_trv": ["heat", "Lounge TRV"], "sensor.lounge_temperature": ["20.4", "Lounge temperature"], "sensor.lounge_trv_battery": ["88", "Lounge TRV battery"], "light.lounge_lamp": ["on", "Lounge lamp"], "light.lounge_reading_lamp": ["off", "Reading lamp"], "binary_sensor.patio_door": ["off", "Patio door"], "media_player.kitchen_speaker": ["playing", "Kitchen speaker"], "sensor.bathroom_humidity": ["61", "Bathroom humidity"] };
+  for (const [id, [state, name]] of Object.entries(SPARE)) states[id] = { entity_id: id, state, attributes: { friendly_name: name, ...(id.startsWith("cover") ? { current_position: 70 } : {}), ...(id === "binary_sensor.patio_door" ? { device_class: "door" } : {}), ...(id === "light.lounge_lamp" ? { brightness: 153, supported_color_modes: ["brightness"] } : {}), ...(id.startsWith("climate") ? { current_temperature: 19.5, temperature: 20, hvac_action: "heating" } : {}), ...(id.startsWith("sensor") ? (id.endsWith("temperature") ? { unit_of_measurement: "°C", device_class: "temperature" } : { unit_of_measurement: "%" }) : {}) } };
   // rooms as Home Assistant knows them ("areas"), so the editor can guess which device is in which room
   const areas = { lounge: { name: "Lounge" }, kitchen: { name: "Kitchen" }, master: { name: "Master bedroom" }, bathroom: { name: "Bathroom" }, nursery: { name: "Nursery" }, office: { name: "Study" } };
-  const entities = { "climate.lounge_trv": { area_id: "lounge" }, "sensor.lounge_temperature": { area_id: "lounge" }, "sensor.lounge_trv_battery": { area_id: "lounge", entity_category: "diagnostic" }, "climate.main_bedroom": { area_id: "master" }, "media_player.kitchen_speaker": { area_id: "kitchen" }, "sensor.bathroom_humidity": { area_id: "bathroom" }, "cover.nursery_blind": { area_id: "nursery" }, "light.office": { area_id: "office" } };
+  const entities = { "climate.lounge_trv": { area_id: "lounge" }, "sensor.lounge_temperature": { area_id: "lounge" }, "sensor.lounge_trv_battery": { area_id: "lounge", entity_category: "diagnostic" }, "light.lounge_lamp": { area_id: "lounge" }, "light.lounge_reading_lamp": { area_id: "lounge" }, "binary_sensor.patio_door": { area_id: "kitchen" }, "climate.main_bedroom": { area_id: "master" }, "media_player.kitchen_speaker": { area_id: "kitchen" }, "sensor.bathroom_humidity": { area_id: "bathroom" }, "cover.nursery_blind": { area_id: "nursery" }, "light.office": { area_id: "office" } };
+  // a made-up last day for the replay: evening lights, a rainy afternoon, blinds down at night, heating morning and evening
+  async function callWS(msg) {
+    if (msg.type !== "history/history_during_period") throw new Error("not in the demo");
+    const t0 = new Date(msg.start_time).getTime() / 1000, out = {};
+    for (const id of msg.entity_ids) {
+      const dom = id.split(".")[0], rows = [];
+      for (let i = 0; i <= 96; i++) {
+        const lu = t0 + i * 900, h = new Date(lu * 1000).getHours(), dark = h >= 20 || h < 7, evening = h >= 17 && h < 23;
+        let s = (states[id] || {}).state || "off", a = { ...((states[id] || {}).attributes || {}) };
+        if (dom === "light" || dom === "switch") { s = evening || (h >= 6 && h < 8) ? "on" : "off"; if (s === "on") a.brightness = h >= 21 ? 90 : 255; else delete a.brightness; }
+        else if (dom === "cover") { const pos = dark ? 0 : 100; s = pos ? "open" : "closed"; a.current_position = pos; }
+        else if (dom === "climate") { const on = (h >= 6 && h < 9) || (h >= 16 && h < 22); a.hvac_action = on ? "heating" : "idle"; a.current_temperature = on ? 20.5 : 17.5; }
+        else if (dom === "weather") { s = h >= 13 && h < 17 ? "rainy" : h >= 17 && h < 19 ? "cloudy" : dark ? "clear-night" : "sunny"; a.temperature = dark ? 8 : 14; }
+        else if (dom === "sun") s = dark ? "below_horizon" : "above_horizon";
+        else if (dom === "media_player") s = evening ? "playing" : "off";
+        else if (dom === "lock") s = h >= 8 && h < 18 ? "unlocked" : "locked";
+        const last = rows[rows.length - 1];
+        if (!last || last.s !== s || JSON.stringify(last.full) !== JSON.stringify(a)) rows.push({ s, a, full: a, lu });
+      }
+      out[id] = rows.map(({ s, a, lu }) => ({ s, a, lu }));
+    }
+    return out;
+  }
   function callService(domain, service, data) {
     const s = states[data.entity_id], spare = SPARE[data.entity_id];
     window.lastCall = { domain, service, data };
     if (!s) return;
     if (service === "toggle") { if (spare) s.state = s.state === "on" ? "off" : "on"; else lights = !lights; }
-    else if (domain === "cover" && service !== "stop_cover") {
+    else if (domain === "cover" && (service === "open_cover" || service === "close_cover")) {
       const pos = service === "open_cover" ? 100 : 0;
       if (spare) { s.state = pos ? "open" : "closed"; s.attributes.current_position = pos; } else { cover = pos; document.getElementById("cover").value = pos; }
+    } else if (service === "set_cover_position") {
+      if (spare) { s.state = data.position ? "open" : "closed"; s.attributes.current_position = data.position; } else { cover = data.position; document.getElementById("cover").value = cover; }
+    } else if (service === "turn_on" && domain === "light") {
+      const b = Math.round((data.brightness_pct / 100) * 255);
+      if (spare) { s.state = "on"; s.attributes.brightness = b; } else { dims[data.entity_id] = b; lights = true; }
     } else if (service === "set_temperature") { if (spare) s.attributes.temperature = data.temperature; else temps[data.entity_id] = data.temperature; }
     push();
   }
@@ -94,14 +122,14 @@
     states["weather.home"] = { entity_id: "weather.home", state: weather, attributes: { friendly_name: "Home", temperature: weather === "snowy" ? -1 : 14 } };
     states["sun.sun"] = { entity_id: "sun.sun", state: night ? "below_horizon" : "above_horizon", attributes: {} };
     document.getElementById("night").classList.toggle("on", night);
-    const hass = { states: { ...states }, areas, entities, devices: {}, callService };
+    const hass = { states: { ...states }, areas, entities, devices: {}, callService, callWS };
     card.hass = hass;
     if (editor) editor.hass = hass;
   }
   function make() {
     if (card) card.remove();
     card = document.createElement("toon-house-card");
-    config = { type: "custom:toon-house-card", layout: url, view: q.get("view") || "outside", weather: config && "weather" in config ? config.weather : "weather.home", ...(theme ? { theme } : {}), ...(config && config.entities ? { entities: config.entities } : {}), ...(config && config.devices ? { devices: config.devices } : {}) };
+    config = { type: "custom:toon-house-card", layout: url, view: q.get("view") || "outside", weather: config && "weather" in config ? config.weather : "weather.home", ...(config && config.quality ? { quality: config.quality } : q.get("quality") ? { quality: q.get("quality") } : {}), ...(theme ? { theme } : {}), ...(config && config.entities ? { entities: config.entities } : {}), ...(config && config.devices ? { devices: config.devices } : {}) };
     card.setConfig({ height: "100vh", ...config });
     document.getElementById("host").appendChild(card);
     card.addEventListener("hass-more-info", (e) => toast(`In Home Assistant this opens the controls for ${e.detail.entityId}.`));

@@ -42,3 +42,20 @@ assert.deepEqual(rank(hass, "climate", "", { query: "kitch" }).map((o) => o.id),
 assert.equal(stateText(hass.states["climate.trv_a"]), "20°");
 assert.equal(stateText(null), "not found");
 console.log("match tests passed");
+
+// filling a room from its area
+import { areaForRoom, areaThings, kindFor } from "../src/match.js";
+const h2 = {
+  areas: { lounge: { name: "Lounge" }, bed2: { name: "Bedroom 2" }, bed3: { name: "Bedroom 3" }, kit: { name: "Kitchen diner" } },
+  devices: { d9: { area_id: "lounge" } },
+  entities: { "light.a": { area_id: "lounge" }, "cover.b": { device_id: "d9" }, "sensor.batt": { area_id: "lounge", entity_category: "diagnostic" }, "sensor.temp": { area_id: "lounge" }, "sensor.power": { area_id: "lounge" }, "binary_sensor.m": { area_id: "lounge" }, "binary_sensor.prob": { area_id: "lounge" }, "switch.plug": { area_id: "lounge" }, "light.used": { area_id: "lounge" }, "light.other": { area_id: "bed2" }, "media_player.tv": { area_id: "lounge" } },
+  states: Object.fromEntries([st("light.a", "Lamp"), st("cover.b", "Blind"), st("sensor.batt", "Battery", { device_class: "battery" }), st("sensor.temp", "Temp", { device_class: "temperature" }), st("sensor.power", "Power", { device_class: "power" }), st("binary_sensor.m", "Motion", { device_class: "motion" }), st("binary_sensor.prob", "Problem", { device_class: "problem" }), st("switch.plug", "Plug"), st("light.used", "Used"), st("light.other", "Other"), st("media_player.tv", "Telly", { device_class: "tv" })].map((s) => [s.entity_id, s])),
+};
+assert.equal(areaForRoom(h2, { name: "Living room" }).id, "lounge", "a living room finds the Lounge area");
+assert.equal(areaForRoom(h2, { name: "Bedroom 2" }).id, "bed2", "numbered bedrooms keep their number");
+assert.equal(areaForRoom(h2, { name: "Garage" }), null, "no matching area: nothing");
+assert.equal(areaForRoom(h2, { name: "Snug", area: "Bedroom 3" }).id, "bed3", "a room can name its area in the house file");
+const things = areaThings(h2, "lounge", { "light.used": "x" });
+assert.deepEqual(things.map((t) => `${t.id}:${t.kind}:${t.sure ? 1 : 0}`), ["light.a:light:1", "cover.b:cover:1", "binary_sensor.m:motion:1", "media_player.tv:tv:1", "switch.plug:switch:0", "sensor.temp:sensor:0"], "the area's things by kind; used, diagnostic and odd ones left out; plugs and readings offered but not ticked");
+assert.equal(kindFor(h2, "sensor.power"), null);
+console.log("area tests passed");

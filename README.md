@@ -17,7 +17,10 @@ A cartoon 3D dollhouse of your home for Home Assistant. You describe your rooms,
 - **Three kinds of view.** One cutaway per floor (walls cut low so you can see in), and the whole house from outside with the roof on. Drag to turn, pinch or scroll to zoom.
 - **Devices in the right place.** A blind sits on its window and its slats move with the real position. Lights glow and light the floor. Radiators turn orange when heating. The garage door opens.
 - **Real weather.** Point it at your weather report and it rains on the house when it rains outside. Snow settles on the roof, fog rolls in, lightning flashes, and at night the stars come out and the windows glow.
-- **Tap to control.** Tapping a light or switch toggles it. Tapping anything else opens its normal Home Assistant details.
+- **Tap to control.** Tapping a light or switch toggles it. Tapping anything else opens its normal Home Assistant details. Hold a lamp for its colour and other controls.
+- **Tap a room.** A panel lists everything in it: switch and dim the lights, move the blinds, turn the radiator up or down.
+- **Replay the day.** Wind the house back through the last 24 hours and watch the lights, blinds, heating and weather as they were.
+- **Fills itself in.** If your devices have areas in Home Assistant, the editor can sort them into the right rooms for you.
 - **A cartoon editor.** Tap a light, blind or radiator and a little house called Roofus helps you set it up: pick the real device, try it, done. No code needed.
 - **Plan ahead.** A device with no entity is drawn grey as "planned", so you can lay out kit you have not bought yet.
 - **One file, no internet.** The 3D library and the font are bundled in, so it works on a local-only setup.
@@ -116,6 +119,7 @@ Edit the card on your dashboard and you get a cartoon editor instead of a box of
 - **Your house**: point at a house file, or load one straight into the card so there is nothing to copy onto the server.
 - **The look**: cartoon or brick colours, which view opens first, the weather report to follow, the name and the height.
 - **Add or move things**: pick a sticker (light, blind, radiator, lock, camera...) and tap the little plan where it goes. Blinds snap onto the nearest window and radiators onto the nearest wall. Drag anything to move it.
+- **Find my things by room**: one button matches your rooms to Home Assistant's areas ("Living room" finds an area called "Lounge") and offers to put each area's lights, blinds, radiators and sensors on the plan, already connected. Grey things already waiting in a room are connected instead of doubled. If a room's name is nothing like its area, add `area: Area name` to the room in the house file.
 - **Connect your things**: every light, blind, radiator and sensor in the house is listed by floor. Grey ones are not connected yet.
 
 ![Adding things by tapping the plan](docs/img/editor-plan.png)
@@ -133,6 +137,17 @@ While you are editing the card, tap anything, on the plan, in the list or on the
 | ![Picking the real device](docs/img/setup-pick.png) | ![Trying it](docs/img/setup-try.png) |
 
 What you add, move and connect is saved in the card's own settings, not in the house file, so it survives when you rebuild the house file. You can try the editor on the [demo page](https://digitaladaption.github.io/toon-house-card/demo/?editor).
+
+## Rooms, replay and old tablets
+
+![The room panel](docs/img/room-panel.png)
+
+- **Tap a room** in one of the floor views and its panel opens. Lights get an on/off button and a dimmer, blinds get open, stop, close and a position slider, radiators get up and down. Tap a name for the full Home Assistant controls. Tap the room again, or the cross, to close it.
+- **Hold a device** for about half a second to open its full Home Assistant controls, such as a lamp's colour.
+- **Replay** (the button by the title) fetches the last 24 hours from Home Assistant's history. Drag the slider or press Play. Nothing can be switched while you are looking at the past; press **Back to now** first. Set `replay: false` to hide the button.
+- **Detail**: `quality: light` is for older tablets (plain pixels, no edge smoothing, half the rain and snow). Left alone, the card starts in full detail and drops to light by itself if falling rain or snow makes it stutter. `quality: full` stops it doing that.
+
+![Replaying the day](docs/img/replay.png)
 
 ## Weather
 
@@ -171,6 +186,8 @@ Or pick it in the card editor under **The look → Weather outside**. Any Home A
 | `devices` | | Things added or moved in the editor, by device id. A new id adds a device (with its `floor`); an id from the house file changes that one; `null` hides it |
 | `weather` | | A weather entity such as `weather.home`, and the sky follows it. Or a fixed word such as `snow` or `rain-night`. Leave out for an always-sunny day |
 | `sun` | `sun.sun` | The entity that says whether it is night |
+| `quality` | `auto` | `full`, `light` (for older tablets), or `auto` to let the card choose |
+| `replay` | `true` | `false` hides the Replay button |
 | `planned_path` | | A dashboard path to open when a planned (grey) device is tapped |
 
 ## Devices

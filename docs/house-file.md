@@ -54,6 +54,7 @@ rooms:
 | `pattern` | Floor pattern: `plain`, `check`, `wood`, `tile` |
 | `floor_colour2` | Second colour for a patterned floor |
 | `label` | Where to put the room's name, if the middle is a bad spot |
+| `area` | The Home Assistant area this room is, by name or id, if its name does not match. Used by "Find my things by room" in the editor |
 | `up` | For a stairs room: which way the stairs climb, `n`, `s`, `e` or `w` |
 
 The kind of room decides its colours and floor pattern. A kitchen gets a checked floor, a bathroom gets tiles, bedrooms take turns through four colour pairs.

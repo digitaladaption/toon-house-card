@@ -98,7 +98,7 @@ export class Weather {
     return p;
   }
   /* Set the scene for this weather. w: from readWeather (null = a plain sunny day).
-     ctx: { theme, box, whole (the outside view, where rain and snow fall), clouds (materials), sunBall, dist (camera distance) } */
+     ctx: { theme, box, whole (the outside view, where rain and snow fall), low (light detail: fewer of everything), clouds (materials), sunBall, dist (camera distance) } */
   apply(w, ctx) {
     this._empty();
     this.box = ctx.box;
@@ -116,7 +116,8 @@ export class Weather {
     const { cx, cz, far } = ctx.box;
     // more cloud, lower and nearer, when the sky is grey
     const spots = [[-0.2, 11, 0.1, 2.4], [0.7, 12.5, -0.7, 2.1], [-1.2, 11.5, -0.9, 2.2], [0.1, 13.5, -1.5, 2.6], [1.4, 11, 0.4, 1.8], [-0.7, 13, 0.9, 2.0], [0.9, 14, 1.0, 2.3], [-1.6, 12, 0.3, 1.9]];
-    if (ctx.whole) for (const [fx, y, fz, s] of spots.slice(0, L[4])) {
+    const few = ctx.low ? 0.5 : 1;
+    if (ctx.whole) for (const [fx, y, fz, s] of spots.slice(0, Math.ceil(L[4] * few))) {
       for (const [dx, dy, dz, r] of [[0, 0, 0, 1], [1.1, -0.15, 0.1, 0.75], [-1.1, -0.2, 0, 0.7], [0.3, 0.45, -0.1, 0.7]]) {
         const puff = this.outlined(new T.SphereGeometry(r * s, 16, 10), new T.MeshBasicMaterial({ color: cloud }), 0.09);
         puff.position.set(cx + fx * far * 0.55 + dx * s, y + dy * s, cz + fz * far * 0.5 + dz * s);
@@ -126,7 +127,7 @@ export class Weather {
     }
     if (night && !dull && ctx.whole) {
       // stars all round, above and below: the plot floats in the night sky
-      const n = 320, pos = new Float32Array(n * 3), R = far * 4;
+      const n = ctx.low ? 140 : 320, pos = new Float32Array(n * 3), R = far * 4;
       for (let i = 0; i < n; i++) { const a = Math.random() * Math.PI * 2, e = -0.75 + Math.random() * 1.7; pos[i * 3] = cx + R * Math.cos(e) * Math.cos(a); pos[i * 3 + 1] = R * Math.sin(e); pos[i * 3 + 2] = cz + R * Math.cos(e) * Math.sin(a); }
       const g = new T.BufferGeometry();
       g.setAttribute("position", new T.BufferAttribute(pos, 3));
@@ -139,8 +140,8 @@ export class Weather {
     this.range(ctx.dist || far * 3);
     if (ctx.whole) {
       const spread = far * 1.5, top = 17;
-      if (["rain", "pour", "storm", "sleet"].includes(kind)) this.fall = [{ p: this._points(kind === "rain" || kind === "sleet" ? 520 : 1000, 1.5, DROP, spread, top), speed: kind === "rain" || kind === "sleet" ? 17 : 23, drift: -3.2, sway: 0, top }];
-      if (kind === "snow" || kind === "sleet") (this.fall = this.fall || []).push({ p: this._points(kind === "snow" ? 520 : 200, 0.42, FLAKE, spread, top), speed: 2.3, drift: 0.5, sway: 0.7, top });
+      if (["rain", "pour", "storm", "sleet"].includes(kind)) this.fall = [{ p: this._points((kind === "rain" || kind === "sleet" ? 520 : 1000) * few, 1.5, DROP, spread, top), speed: kind === "rain" || kind === "sleet" ? 17 : 23, drift: -3.2, sway: 0, top }];
+      if (kind === "snow" || kind === "sleet") (this.fall = this.fall || []).push({ p: this._points((kind === "snow" ? 520 : 200) * few, 0.42, FLAKE, spread, top), speed: 2.3, drift: 0.5, sway: 0.7, top });
     }
     if (kind === "storm" && !this.still) this.flashAt = performance.now() + 1500 + Math.random() * 3000;
     this.spread = far * 1.5;

@@ -79,3 +79,56 @@ export function rank(hass, kind, room, { wide = false, query = "", used = {} } =
   out.sort((x, y) => y.near - x.near || (x.usedBy ? 1 : 0) - (y.usedBy ? 1 : 0) || y.fit - x.fit || x.name.localeCompare(y.name));
   return out;
 }
+
+// ---------- filling a room from its Home Assistant area ----------
+const norm2 = (s) => String(s || "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+// the Home Assistant area that is this room, if one has a matching name: { id, name } or null
+export function areaForRoom(hass, room) {
+  const areas = Object.entries((hass && hass.areas) || {}), want = norm2(room.area);
+  if (want) {
+    const hit = areas.find(([id, a]) => norm2(id) === want || norm2(a.name) === want);
+    if (hit) return { id: hit[0], name: hit[1].name || hit[0] };
+  }
+  const words = roomWords(room.name);
+  let best = null;
+  for (const [id, a] of areas) {
+    const n = norm2(a.name);
+    const score = n === words[0] ? 2 : words.includes(n) ? 1 : 0;
+    if (score && (!best || score > best.score)) best = { id, name: a.name || id, score };
+  }
+  return best ? { id: best.id, name: best.name } : null;
+}
+// what kind of thing on the plan an entity would be, and whether it is worth adding without being asked
+export function kindFor(hass, id) {
+  const st = hass.states[id], dom = id.split(".")[0], cls = (st && st.attributes && st.attributes.device_class) || "";
+  if (dom === "light") return { kind: "light", sure: true };
+  if (dom === "cover") return { kind: "cover", sure: true };
+  if (dom === "climate") return { kind: "climate", sure: true };
+  if (dom === "lock") return { kind: "lock", sure: true };
+  if (dom === "camera") return { kind: "camera", sure: true };
+  if (dom === "media_player") return { kind: cls === "tv" || cls === "receiver" ? "tv" : "speaker", sure: true };
+  if (dom === "binary_sensor") {
+    if (CLASSES.motion.includes(cls)) return { kind: "motion", sure: true };
+    if (["door", "window", "opening", "garage_door"].includes(cls)) return { kind: "contact", sure: true };
+    return null;
+  }
+  if (dom === "sensor") return cls === "temperature" || cls === "humidity" ? { kind: "sensor", sure: false } : null;
+  if (dom === "switch" || dom === "fan") return { kind: "switch", sure: false };
+  return null;
+}
+/* The things in an area that are not on the plan yet.
+   used: { entity id: anything } for the ones already connected. Returns [{ id, name, kind, sure }]. */
+export function areaThings(hass, areaId, used = {}) {
+  const out = [];
+  if (!hass || !hass.states || !areaId) return out;
+  for (const id of Object.keys(hass.states)) {
+    const reg = (hass.entities || {})[id] || {};
+    if (reg.hidden || reg.entity_category || used[id]) continue;
+    const area = reg.area_id || ((hass.devices || {})[reg.device_id] || {}).area_id;
+    if (area !== areaId) continue;
+    const k = kindFor(hass, id);
+    if (k) out.push({ id, name: (hass.states[id].attributes || {}).friendly_name || id, ...k });
+  }
+  const order = ["light", "cover", "climate", "lock", "contact", "motion", "camera", "tv", "speaker", "switch", "sensor"];
+  return out.sort((a, b) => order.indexOf(a.kind) - order.indexOf(b.kind) || a.name.localeCompare(b.name));
+}

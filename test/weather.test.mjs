@@ -26,3 +26,14 @@ assert.notEqual(tintTheme(theme, { kind: "clear", night: true }, true).glass, ti
 assert.equal(tintKey({ kind: "rain", night: false }, true), "", "rain needs no rebuild");
 assert.equal(theme.roof, "#f00", "the theme passed in is never changed");
 console.log("weather tests passed");
+
+// replay: the state of things at a moment in the past
+import { snapshot, whenText } from "../src/replay.js";
+const hist = { "light.a": [{ s: "off", a: { x: 1 }, lu: 100 }, { s: "on", lu: 200 }, { s: "off", a: { x: 2 }, lu: 300 }], "cover.b": [] };
+assert.equal(snapshot(hist, 150e3)["light.a"].state, "off");
+assert.deepEqual(snapshot(hist, 250e3)["light.a"], { entity_id: "light.a", state: "on", attributes: { x: 1 } }, "a row without attributes keeps the ones before it");
+assert.equal(snapshot(hist, 999e3)["light.a"].attributes.x, 2);
+assert.equal(snapshot(hist, 50e3)["light.a"].state, "off", "before the first row: the nearest known");
+assert.ok(!("cover.b" in snapshot(hist, 150e3)), "no history: left to the live state");
+assert.ok(whenText(Date.now() - 60e3).startsWith(new Date(Date.now() - 60e3).getDate() === new Date().getDate() ? "Today" : "Yesterday"));
+console.log("replay tests passed");
