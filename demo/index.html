@@ -12,13 +12,19 @@
   #panel{position:fixed;left:50%;bottom:12px;transform:translateX(-50%);z-index:5;padding:8px 12px;display:flex;gap:8px;align-items:center;flex-wrap:wrap;justify-content:center;width:max-content;max-width:calc(100vw - 16px)}
   #panel .btn{min-height:44px;font-size:15px;padding:6px 12px}
   #panel label{display:flex;gap:6px;align-items:center;font-weight:700;font-size:15px}
-  #home{position:fixed;right:12px;top:12px;z-index:5}
+  #home{position:fixed;right:12px;top:12px;z-index:5;display:flex;gap:8px}
+  #drawer{position:fixed;top:0;right:0;bottom:0;width:min(440px,100vw);z-index:8;background:var(--paper);border-left:3px solid var(--ink);overflow:auto;padding:10px;display:none}
+  #drawer.open{display:block}
+  #drawer .bar{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;font-weight:700;font-size:18px}
+  body.editing #host{margin-right:min(440px,100vw)}
+  body.editing #home{display:none}
   @media (max-width:600px){#panel .btn span.t{display:none}#home{top:auto;bottom:86px}}
 </style>
 </head>
 <body class="toon">
 <div id="host"></div>
-<a id="home" class="btn" href="../importer/">Build your own</a>
+<div id="home"><button class="btn" id="edit">Edit this card</button><a class="btn" href="../importer/">Build your own</a></div>
+<div id="drawer"><div class="bar"><span>The card editor in Home Assistant</span><button class="btn" id="closeEdit">Close</button></div><div id="editorHost"></div></div>
 <div id="panel" class="panel">
   <button class="btn on" id="lights">Lights</button>
   <label>Blinds <input id="cover" type="range" min="0" max="100" value="40" aria-label="Blind position"></label>
@@ -47,10 +53,14 @@
       else if (d.kind === "contact" || d.kind === "motion") s.state = "off";
       else if (d.kind === "camera") s.state = "idle";
       else if (d.kind === "speaker" || d.kind === "tv") s.state = lights ? "playing" : "off";
+      s.attributes.friendly_name = d.name;
       states[d.entity] = s;
     }
   }
-  let card, toastTimer;
+  // a few spare devices, so the editor has something to offer for the grey (planned) ones
+  const SPARE = { "light.office": ["on", "Office light"], "light.spare_lamp": ["off", "Spare lamp"], "cover.nursery_blind": ["open", "Nursery blind"], "climate.main_bedroom": ["heat", "Main bedroom radiator"], "binary_sensor.patio_door": ["off", "Patio door"], "media_player.kitchen_speaker": ["playing", "Kitchen speaker"], "sensor.bathroom_humidity": ["61", "Bathroom humidity"] };
+  for (const [id, [state, name]] of Object.entries(SPARE)) states[id] = { entity_id: id, state, attributes: { friendly_name: name, ...(id.startsWith("cover") ? { current_position: 70 } : {}), ...(id.startsWith("climate") ? { current_temperature: 19.5, hvac_action: "heating" } : {}), ...(id.startsWith("sensor") ? { unit_of_measurement: "%" } : {}) } };
+  let card, toastTimer, config, editor;
   function toast(text) {
     const t = document.getElementById("toast");
     t.textContent = text;
@@ -62,12 +72,15 @@
     fill();
     document.getElementById("lights").classList.toggle("on", lights);
     document.getElementById("heat").classList.toggle("on", heat);
-    card.hass = { states: { ...states }, callService: (domain, service) => { if (service === "toggle") { lights = !lights; push(); } } };
+    const hass = { states: { ...states }, callService: (domain, service, data) => { if (service !== "toggle") return; const s = states[data.entity_id]; if (s && SPARE[data.entity_id]) s.state = s.state === "on" ? "off" : "on"; else lights = !lights; push(); } };
+    card.hass = hass;
+    if (editor) editor.hass = hass;
   }
   function make() {
     if (card) card.remove();
     card = document.createElement("toon-house-card");
-    card.setConfig({ layout: url, height: "100vh", view: q.get("view") || "outside", ...(theme ? { theme } : {}) });
+    config = { type: "custom:toon-house-card", layout: url, view: q.get("view") || "outside", ...(theme ? { theme } : {}), ...(config && config.entities ? { entities: config.entities } : {}) };
+    card.setConfig({ height: "100vh", ...config });
     document.getElementById("host").appendChild(card);
     card.addEventListener("hass-more-info", (e) => toast(`In Home Assistant this opens the controls for ${e.detail.entityId}.`));
     push();
@@ -77,6 +90,22 @@
   document.getElementById("lights").onclick = () => { lights = !lights; push(); };
   document.getElementById("heat").onclick = () => { heat = !heat; push(); };
   document.getElementById("cover").oninput = (e) => { cover = Number(e.target.value); push(); };
+  // the editor talks to the card the way Home Assistant makes it: it announces a new config, the card is given it
+  function openEditor() {
+    if (!editor) {
+      editor = document.createElement("toon-house-card-editor");
+      document.getElementById("editorHost").appendChild(editor);
+      editor.addEventListener("config-changed", (e) => { config = e.detail.config; theme = config.theme || ""; window.lastConfig = config; card.setConfig({ height: "100vh", ...config }); editor.setConfig(config); });
+      window.editor = editor;
+    }
+    editor.setConfig(config);
+    push();
+    document.getElementById("drawer").classList.add("open");
+    document.body.classList.add("editing");
+  }
+  document.getElementById("edit").onclick = openEditor;
+  document.getElementById("closeEdit").onclick = () => { document.getElementById("drawer").classList.remove("open"); document.body.classList.remove("editing"); };
+  if (q.has("editor")) openEditor();
   document.getElementById("theme").onclick = (e) => { theme = theme === "brick" ? "toon" : "brick"; e.target.textContent = theme === "brick" ? "Cartoon look" : "Brick look"; make(); };
   if (q.has("clean")) { document.getElementById("panel").style.display = "none"; document.getElementById("home").style.display = "none"; }
 </script>

@@ -116,13 +116,16 @@ devices:
 
 | Key | What it is |
 |---|---|
-| `name` | Shown when a planned device is tapped |
+| `name` | Shown in the editor, and when a planned device is tapped |
+| `id` | A short name of your own for this device. Optional: without one, the card makes it from the name (`Kitchen light` becomes `kitchen_light`). Links made in the card editor are stored against it, so do not rename a device you have connected |
 | `kind` | `light`, `switch`, `cover`, `climate`, `lock`, `motion`, `contact`, `camera`, `speaker`, `tv`, `sensor` |
 | `entity` | The Home Assistant entity. `null` draws it grey as planned |
 | `x`, `y` | A spot on the floor, **or** |
 | `room`, `wall`, `at` | a place on a wall, the same way as openings |
 | `rot` | For a `tv`: which way it faces, in degrees |
 | `nav` | A dashboard path to open if it is tapped while still planned |
+
+You can leave `entity` as `null` in the file and connect devices in the card editor instead. Those links are kept in the card's settings (`entities`), not in this file.
 
 A `cover` on a wall is attached to the window, patio door or garage door at that position. Its slats follow the entity's `current_position`.
 

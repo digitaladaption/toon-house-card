@@ -9,8 +9,11 @@ import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js
 import { floorWalls, faceWithCutouts, bbox, roomPoints, uncovered, EXT_WALL } from "./geometry.js";
 import { resolveTheme, roomStyle, drawPattern, PATTERN_SIZE } from "./theme.js";
 import { furnitureParts } from "./furniture.js";
+import { nameDevices } from "./layout.js";
+import { ensureFont, FONT } from "./font.js";
+import "./editor.js";
 
-const VERSION = "0.3.0";
+const VERSION = "0.4.0";
 const SILL = 0.9, HEAD = 2.1, DOOR_HEAD = 2.05, GAP = 0.2;
 const tex = (pattern, a, b) => `tex|${pattern}|${a}|${b || ""}`;
 const esc = (s) => String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/"/g, "&quot;");
@@ -62,16 +65,39 @@ class ToonHouseCard extends HTMLElement {
       },
     };
   }
+  static getConfigElement() {
+    return document.createElement("toon-house-card-editor");
+  }
   setConfig(config) {
     if (!config || !config.layout) throw new Error('Set "layout" to the address of your house file (for example /local/toon-house/house.json) or put the house in the card config.');
     // asking for a different opening view moves to it, even after the card has been used
-    if (this._config && config.view !== undefined && this._config.view !== config.view) this._mode = null;
+    const newView = this._config && config.view !== undefined && this._config.view !== config.view;
+    if (newView) this._mode = null;
     this._config = { view: "outside", cut_height: 1.2, ...config };
     if (!this.shadowRoot) {
+      ensureFont();
       this.attachShadow({ mode: "open" });
       this._dom();
     }
     if (this._config.height) this.style.setProperty("--toon-house-h", typeof this._config.height === "number" ? `${this._config.height}px` : this._config.height);
+    else this.style.removeProperty("--toon-house-h");
+    // Only read the house again when the house itself changed. Linking a device or changing the title
+    // (which the editor does on every edit) must not rebuild the whole scene.
+    const key = JSON.stringify([this._config.layout, this._config.theme || null, this._config.colours || null, this._config.cut_height]);
+    if (key === this._layoutKey && this._floors) {
+      this._applyEntities();
+      this._header();
+      if (newView) {
+        this._pickMode();
+        if (this._renderer) this._build(true);
+      } else if (this._devs) {
+        this._sig = this._signature();
+        this._syncDevices();
+        this._req();
+      }
+      return;
+    }
+    this._layoutKey = key;
     this._loadLayout();
   }
   getCardSize() {
@@ -99,7 +125,7 @@ class ToonHouseCard extends HTMLElement {
   _dom() {
     this.shadowRoot.innerHTML = `<style>
       :host{display:block}
-      ha-card{position:relative;overflow:hidden;font-family:"Trebuchet MS","Segoe UI",system-ui,sans-serif;color:#1b1b1b}
+      ha-card{position:relative;overflow:hidden;font-family:${FONT};font-weight:500;color:#1b1b1b}
       .wrap{position:relative;height:var(--toon-house-h,calc(100vh - 60px));min-height:var(--toon-house-min-h,380px)}
       canvas{display:block;width:100%;height:100%;touch-action:none;outline:none}
       .bar{position:absolute;left:12px;top:10px;right:12px;display:flex;gap:8px;flex-wrap:wrap;align-items:center;pointer-events:none}
@@ -134,6 +160,7 @@ class ToonHouseCard extends HTMLElement {
   }
   async _loadLayout() {
     const src = this._config.layout;
+    if (this._failed) { this._failed = false; this._dom(); }
     try {
       if (typeof src === "string") {
         const r = await fetch(`${src}${src.includes("?") ? "&" : "?"}v=${Date.now()}`);
@@ -155,7 +182,8 @@ class ToonHouseCard extends HTMLElement {
     this.theme = resolveTheme(this._config.theme || L.theme, { ...(L.colours || {}), ...(this._config.colours || {}) });
     this._H = L.storey_height || 2.4;
     this._warnings = [];
-    let bed = 0, n = 0;
+    let bed = 0;
+    nameDevices(L);
     this._floors = L.floors.map((f, i) => {
       f.id = f.id || `floor${i}`;
       f.name = f.name || (i === 0 ? "Ground" : i === 1 ? "Upstairs" : `Floor ${i}`);
@@ -166,7 +194,7 @@ class ToonHouseCard extends HTMLElement {
         r.name = r.name || "";
         r.points = roomPoints(r);
       });
-      for (const d of f.devices || []) d.id = d.id || `dev${n++}`;
+      for (const d of f.devices || []) d._file = d.entity === undefined ? null : d.entity;
       const walls = floorWalls(f);
       this._warnings.push(...walls.warnings);
       const styles = {};
@@ -180,10 +208,9 @@ class ToonHouseCard extends HTMLElement {
       }
       return { floor: f, walls, styles, off: f.offset || [0, 0], baseY: i * (this._H + GAP) };
     });
-    const first = String(this._config.view);
-    const idx = this._floors.findIndex((F) => F.floor.id === first);
-    if (this._mode == null) this._mode = idx >= 0 ? idx : /^\d+$/.test(first) && Number(first) < this._floors.length ? Number(first) : first === "ground" ? 0 : "whole";
-    this.shadowRoot.querySelector("h1").textContent = this._config.title != null ? this._config.title : L.title || "";
+    this._applyEntities();
+    this._pickMode();
+    this._header();
     const modes = this.shadowRoot.querySelector(".modes");
     modes.innerHTML = "";
     const add = (label, mode) => {
@@ -203,7 +230,27 @@ class ToonHouseCard extends HTMLElement {
     const o = L.outside || {};
     this._plot = { x0: house.x0 - 2, x1: house.x1 + 2, back: house.y0 - 9, front: house.y1 + 7, ...(o.plot || L.plot || {}) };
   }
+  // which view to open on, unless the user has already moved to another
+  _pickMode() {
+    // a new house may have fewer floors than the one being looked at
+    if (typeof this._mode === "number" && this._mode >= this._floors.length) this._mode = null;
+    if (this._mode != null) return;
+    const first = String(this._config.view), idx = this._floors.findIndex((F) => F.floor.id === first);
+    this._mode = idx >= 0 ? idx : /^\d+$/.test(first) && Number(first) < this._floors.length ? Number(first) : first === "ground" ? 0 : "whole";
+  }
+  _header() {
+    this.shadowRoot.querySelector("h1").textContent = this._config.title != null ? this._config.title : (this._layout && this._layout.title) || "";
+  }
+  // links made in the editor ("entities" in the card settings) win over what the house file says
+  _applyEntities() {
+    const map = this._config.entities || {}, has = (k) => Object.prototype.hasOwnProperty.call(map, k);
+    for (const F of this._floors || []) for (const d of F.floor.devices || []) d.entity = has(d.id) ? map[d.id] : d.name && has(d.name) ? map[d.name] : d._file;
+  }
   _fail(msg) {
+    // remember, so the next good setting (a corrected file address, say) starts from a clean card
+    this._failed = true;
+    this._floors = null;
+    this._layoutKey = null;
     this._teardown();
     this._wrap.innerHTML = `<div class="err">${esc(msg)}</div>`;
   }
@@ -1095,5 +1142,5 @@ class ToonHouseCard extends HTMLElement {
 
 if (!customElements.get("toon-house-card")) customElements.define("toon-house-card", ToonHouseCard);
 window.customCards = window.customCards || [];
-if (!window.customCards.some((c) => c.type === "toon-house-card")) window.customCards.push({ type: "toon-house-card", name: "Toon House Card", description: "A cartoon 3D dollhouse of your home with live devices", preview: false });
+if (!window.customCards.some((c) => c.type === "toon-house-card")) window.customCards.push({ type: "toon-house-card", name: "Toon House Card", description: "A cartoon 3D dollhouse of your home with live devices", preview: false, documentationURL: "https://github.com/digitaladaption/toon-house-card" });
 console.info(`%c TOON-HOUSE-CARD %c ${VERSION} `, "background:#FFD83A;color:#1b1b1b;font-weight:900", "background:#1b1b1b;color:#fff");

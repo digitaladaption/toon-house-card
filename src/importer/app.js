@@ -1,7 +1,8 @@
 // Toon House Builder: upload a plan picture, find the rooms, tidy them up, download a house file.
 // Everything happens in this browser tab. The picture is never sent anywhere.
 import { wallMask, wallThickness, findFloors, inkMask, detectFloor, toFloor, guessNames, cleanFloor } from "./detect.js";
-import { roofus, ICON } from "./art.js";
+import { roofus, ICON } from "../art.js";
+import { nameDevices } from "../layout.js";
 
 const $ = (id) => document.getElementById(id);
 const MAX_SIDE = 2200;
@@ -285,7 +286,7 @@ function buildHouse() {
     }
     house.floors.push(fl);
   });
-  S.house = house;
+  S.house = nameDevices(house);
   preview();
 }
 function fitPreview() {

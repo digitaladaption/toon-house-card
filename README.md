@@ -17,8 +17,9 @@ A cartoon 3D dollhouse of your home for Home Assistant. You describe your rooms,
 - **Three kinds of view.** One cutaway per floor (walls cut low so you can see in), and the whole house from outside with the roof on. Drag to turn, pinch or scroll to zoom.
 - **Devices in the right place.** A blind sits on its window and its slats move with the real position. Lights glow and light the floor. Radiators turn orange when heating. The garage door opens.
 - **Tap to control.** Tapping a light or switch toggles it. Tapping anything else opens its normal Home Assistant details.
+- **A cartoon editor.** Connect each light and blind to its real device by picking from a list. No code needed.
 - **Plan ahead.** A device with no entity is drawn grey as "planned", so you can lay out kit you have not bought yet.
-- **One file, no internet.** The 3D library is bundled in, so it works on a local-only setup.
+- **One file, no internet.** The 3D library and the font are bundled in, so it works on a local-only setup.
 - **Light on the tablet.** It only redraws when something changes.
 
 ## Install
@@ -105,6 +106,20 @@ The full list of options (openings, furniture, devices, roofs, garden, colours) 
 - If something is wrong (a window on an inside wall, a device in a room that does not exist), an orange **!** button appears on the card. Tap it for a plain-language list.
 - You do not need a roof section. Without one, the card puts a pitched roof on the top floor and flat roofs on any lower part that sticks out.
 
+## Set it up without typing
+
+Edit the card on your dashboard and you get a cartoon editor instead of a box of code.
+
+![The card editor](docs/img/editor.png)
+
+- **Your house**: point at a house file, or load one straight into the card so there is nothing to copy onto the server.
+- **The look**: cartoon or brick colours, which view opens first, the name and the height.
+- **Connect your things**: every light, blind, radiator and sensor in the house is listed by floor. Pick the real Home Assistant device for each one. Grey ones are not connected yet.
+
+![Connecting devices](docs/img/editor-devices.png)
+
+The links you make are saved in the card's own settings, so they survive when you rebuild the house file. You can try the editor on the [demo page](https://digitaladaption.github.io/toon-house-card/demo/?editor).
+
 ## Card options
 
 | Option | Default | What it does |
@@ -116,6 +131,7 @@ The full list of options (openings, furniture, devices, roofs, garden, colours) 
 | `title` | from the house | Text shown top left. Use `""` for none |
 | `height` | fills the screen | Card height, for example `600` or `70vh` |
 | `cut_height` | `1.2` | How high the walls are cut in the floor views, in metres |
+| `entities` | | Links made in the editor: device id to entity, for example `{ kitchen_light: light.kitchen }`. They win over the house file. `null` forces a device back to grey |
 | `planned_path` | | A dashboard path to open when a planned (grey) device is tapped |
 
 ## Devices
