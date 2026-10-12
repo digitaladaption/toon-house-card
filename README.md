@@ -16,11 +16,12 @@ A cartoon 3D dollhouse of your home for Home Assistant. You describe your rooms,
 - **Your floor plan, in 3D.** Flat cartoon colours, thick ink outlines, patterned floors, a blue sky with puffy clouds.
 - **Three kinds of view.** One cutaway per floor (walls cut low so you can see in), and the whole house from outside with the roof on. Drag to turn, pinch or scroll to zoom.
 - **Devices in the right place.** A blind sits on its window and its slats move with the real position. Lights glow and light the floor. Radiators turn orange when heating. The garage door opens.
+- **Real weather.** Point it at your weather report and it rains on the house when it rains outside. Snow settles on the roof, fog rolls in, lightning flashes, and at night the stars come out and the windows glow.
 - **Tap to control.** Tapping a light or switch toggles it. Tapping anything else opens its normal Home Assistant details.
 - **A cartoon editor.** Tap a light, blind or radiator and a little house called Roofus helps you set it up: pick the real device, try it, done. No code needed.
 - **Plan ahead.** A device with no entity is drawn grey as "planned", so you can lay out kit you have not bought yet.
 - **One file, no internet.** The 3D library and the font are bundled in, so it works on a local-only setup.
-- **Light on the tablet.** It only redraws when something changes.
+- **Light on the tablet.** It only redraws when something changes (or while rain or snow is falling).
 
 ## Install
 
@@ -113,7 +114,7 @@ Edit the card on your dashboard and you get a cartoon editor instead of a box of
 ![The card editor](docs/img/editor.png)
 
 - **Your house**: point at a house file, or load one straight into the card so there is nothing to copy onto the server.
-- **The look**: cartoon or brick colours, which view opens first, the name and the height.
+- **The look**: cartoon or brick colours, which view opens first, the weather report to follow, the name and the height.
 - **Add or move things**: pick a sticker (light, blind, radiator, lock, camera...) and tap the little plan where it goes. Blinds snap onto the nearest window and radiators onto the nearest wall. Drag anything to move it.
 - **Connect your things**: every light, blind, radiator and sensor in the house is listed by floor. Grey ones are not connected yet.
 
@@ -133,6 +134,28 @@ While you are editing the card, tap anything, on the plan, in the list or on the
 
 What you add, move and connect is saved in the card's own settings, not in the house file, so it survives when you rebuild the house file. You can try the editor on the [demo page](https://digitaladaption.github.io/toon-house-card/demo/?editor).
 
+## Weather
+
+| Rain | Snow | Night |
+|---|---|---|
+| ![Rain](docs/img/weather-rain.png) | ![Snow](docs/img/weather-snow.png) | ![Night](docs/img/weather-night.png) |
+
+Give the card a weather entity and the sky follows it:
+
+```yaml
+type: custom:toon-house-card
+layout: /local/toon-house/house.json
+weather: weather.home
+```
+
+Or pick it in the card editor under **The look → Weather outside**. Any Home Assistant weather integration works (Met Office, Met.no and so on).
+
+- Rain, heavy rain, thunder, snow, sleet, fog and cloud are all drawn. Snow turns the roof and garden white.
+- Night comes from Home Assistant's `sun.sun`. The windows glow yellow if a light in the house is on, and go dark if not.
+- Rain and snow fall in the outside view only, so it never rains in your kitchen. The floor views just get the grey sky.
+- Falling rain and snow redraw the card at most about 30 times a second, and only while it is on screen. On dry days it still redraws only when something changes. If your device is set to reduce motion, the sky changes but nothing falls.
+- To try a look without waiting for the weather, set `weather` to a fixed word: `rain`, `pour`, `storm`, `snow`, `sleet`, `fog`, `cloudy`, `partly` or `clear`, with `-night` on the end if you like (`snow-night`).
+
 ## Card options
 
 | Option | Default | What it does |
@@ -146,6 +169,8 @@ What you add, move and connect is saved in the card's own settings, not in the h
 | `cut_height` | `1.2` | How high the walls are cut in the floor views, in metres |
 | `entities` | | Links made in the editor: device id to entity, for example `{ kitchen_light: light.kitchen }`. They win over the house file. `null` forces a device back to grey |
 | `devices` | | Things added or moved in the editor, by device id. A new id adds a device (with its `floor`); an id from the house file changes that one; `null` hides it |
+| `weather` | | A weather entity such as `weather.home`, and the sky follows it. Or a fixed word such as `snow` or `rain-night`. Leave out for an always-sunny day |
+| `sun` | `sun.sun` | The entity that says whether it is night |
 | `planned_path` | | A dashboard path to open when a planned (grey) device is tapped |
 
 ## Devices

@@ -12,6 +12,7 @@
   #panel{position:fixed;left:50%;bottom:12px;transform:translateX(-50%);z-index:5;padding:8px 12px;display:flex;gap:8px;align-items:center;flex-wrap:wrap;justify-content:center;width:max-content;max-width:calc(100vw - 16px)}
   #panel .btn{min-height:44px;font-size:15px;padding:6px 12px}
   #panel label{display:flex;gap:6px;align-items:center;font-weight:700;font-size:15px}
+  #panel select{font:inherit;font-weight:700;min-height:44px;border:3px solid var(--ink);border-radius:13px;background:#fff;padding:4px 8px}
   #home{position:fixed;right:12px;top:12px;z-index:5;display:flex;gap:8px}
   #drawer{position:fixed;top:0;right:0;bottom:0;width:min(440px,100vw);z-index:8;background:var(--paper);border-left:3px solid var(--ink);overflow:auto;padding:10px;display:none}
   #drawer.open{display:block}
@@ -30,6 +31,8 @@
   <label>Blinds <input id="cover" type="range" min="0" max="100" value="40" aria-label="Blind position"></label>
   <button class="btn on" id="heat">Heating</button>
   <button class="btn" id="theme">Brick look</button>
+  <label>Weather <select id="wx" aria-label="Weather"><option value="sunny">Sunny</option><option value="partlycloudy">Some cloud</option><option value="cloudy">Cloudy</option><option value="rainy">Rain</option><option value="pouring">Heavy rain</option><option value="lightning-rainy">Thunder</option><option value="snowy">Snow</option><option value="fog">Fog</option></select></label>
+  <button class="btn" id="night">Night</button>
 </div>
 <div id="toast" class="toast"></div>
 <script type="module">
@@ -43,6 +46,7 @@
   const states = {};
   let lights = true, heat = true, cover = 40;
   const temps = {};
+  let weather = q.get("weather") || "sunny", night = q.has("night");
   const devices = (layout.floors || []).flatMap((f) => f.devices || []).filter((d) => d.entity);
   function fill() {
     for (const d of devices) {
@@ -87,6 +91,9 @@
     fill();
     document.getElementById("lights").classList.toggle("on", lights);
     document.getElementById("heat").classList.toggle("on", heat);
+    states["weather.home"] = { entity_id: "weather.home", state: weather, attributes: { friendly_name: "Home", temperature: weather === "snowy" ? -1 : 14 } };
+    states["sun.sun"] = { entity_id: "sun.sun", state: night ? "below_horizon" : "above_horizon", attributes: {} };
+    document.getElementById("night").classList.toggle("on", night);
     const hass = { states: { ...states }, areas, entities, devices: {}, callService };
     card.hass = hass;
     if (editor) editor.hass = hass;
@@ -94,7 +101,7 @@
   function make() {
     if (card) card.remove();
     card = document.createElement("toon-house-card");
-    config = { type: "custom:toon-house-card", layout: url, view: q.get("view") || "outside", ...(theme ? { theme } : {}), ...(config && config.entities ? { entities: config.entities } : {}), ...(config && config.devices ? { devices: config.devices } : {}) };
+    config = { type: "custom:toon-house-card", layout: url, view: q.get("view") || "outside", weather: config && "weather" in config ? config.weather : "weather.home", ...(theme ? { theme } : {}), ...(config && config.entities ? { entities: config.entities } : {}), ...(config && config.devices ? { devices: config.devices } : {}) };
     card.setConfig({ height: "100vh", ...config });
     document.getElementById("host").appendChild(card);
     card.addEventListener("hass-more-info", (e) => toast(`In Home Assistant this opens the controls for ${e.detail.entityId}.`));
@@ -102,6 +109,9 @@
     window.card = card;
   }
   make();
+  document.getElementById("wx").value = weather;
+  document.getElementById("wx").onchange = (e) => { weather = e.target.value; push(); };
+  document.getElementById("night").onclick = () => { night = !night; push(); };
   document.getElementById("lights").onclick = () => { lights = !lights; push(); };
   document.getElementById("heat").onclick = () => { heat = !heat; push(); };
   document.getElementById("cover").oninput = (e) => { cover = Number(e.target.value); push(); };

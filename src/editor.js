@@ -96,6 +96,7 @@ class ToonHouseCardEditor extends HTMLElement {
   set hass(hass) {
     this._hass = hass;
     if (!this.shadowRoot) return;
+    this._weathers();
     this._states();
     this._setup.refresh();
   }
@@ -117,7 +118,7 @@ class ToonHouseCardEditor extends HTMLElement {
     // tidy: no empty leftovers in the saved settings
     if (config.entities && !Object.keys(config.entities).length) delete config.entities;
     if (config.devices && !Object.keys(config.devices).length) delete config.devices;
-    for (const k of ["title", "theme", "height"]) if (config[k] === "" || config[k] == null) delete config[k];
+    for (const k of ["title", "theme", "height", "weather"]) if (config[k] === "" || config[k] == null) delete config[k];
     this._config = config;
     this.dispatchEvent(new CustomEvent("config-changed", { detail: { config }, bubbles: true, composed: true }));
     this._overlayChanged();
@@ -175,6 +176,9 @@ class ToonHouseCardEditor extends HTMLElement {
         <div class="row" id="views"></div>
         <label class="f" for="title">Name shown on the card</label>
         <input id="title" type="text" autocomplete="off">
+        <label class="f">Weather outside</label>
+        <div class="row" id="wxs"></div>
+        <p class="hint" id="wxHint"></p>
         <label class="f">Height</label>
         <div class="row"><button class="btn" id="fill">Fill the screen</button><button class="btn" id="fixed">Set a height</button></div>
         <div class="slider" id="hBox"><input id="height" type="range" min="300" max="1000" step="20" aria-label="Card height"><span class="pill" id="hVal"></span></div>
@@ -358,7 +362,29 @@ class ToonHouseCardEditor extends HTMLElement {
         views.appendChild(b);
       }
     }
+    this._weathers();
     this._talk();
+  }
+  // which weather report the sky follows
+  _weathers() {
+    const box = this.shadowRoot.querySelector("#wxs"), now = this._config.weather || "";
+    const ids = this._hass ? Object.keys(this._hass.states).filter((id) => id.startsWith("weather.")).sort() : [];
+    if (now && now.includes(".") && !ids.includes(now)) ids.push(now);
+    const label = (id) => (this._hass && this._hass.states[id] && this._hass.states[id].attributes.friendly_name) || id;
+    const sig = JSON.stringify([ids.map(label), now]);
+    if (sig === this._wxSig) return;
+    this._wxSig = sig;
+    box.innerHTML = "";
+    const add = (id, label) => {
+      const b = document.createElement("button");
+      b.className = `btn${now === id ? " on" : ""}`;
+      b.textContent = label;
+      b.addEventListener("click", () => this._fire({ ...this._config, weather: id }));
+      box.appendChild(b);
+    };
+    add("", "Always sunny");
+    for (const id of ids) add(id, label(id));
+    this.shadowRoot.querySelector("#wxHint").textContent = ids.length ? "Pick a weather report and the sky follows it: rain, snow, fog, thunder, and stars at night." : "Add a weather integration in Home Assistant (Met Office or Met.no, say) and the sky can follow it.";
   }
   // say something about what the user just did, and keep it up for a few seconds
   _tell(title, text, mood, bad) {

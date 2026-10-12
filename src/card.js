@@ -11,9 +11,10 @@ import { resolveTheme, roomStyle, drawPattern, PATTERN_SIZE } from "./theme.js";
 import { furnitureParts } from "./furniture.js";
 import { applyOverlay } from "./layout.js";
 import { ensureFont, FONT } from "./font.js";
+import { Weather, readWeather, weatherKey, tintTheme, tintKey } from "./weather.js";
 import "./editor.js";
 
-const VERSION = "0.6.0";
+const VERSION = "0.7.0";
 const SILL = 0.9, HEAD = 2.1, DOOR_HEAD = 2.05, GAP = 0.2;
 const tex = (pattern, a, b) => `tex|${pattern}|${a}|${b || ""}`;
 const esc = (s) => String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/"/g, "&quot;");
@@ -95,6 +96,7 @@ class ToonHouseCard extends HTMLElement {
       }
       this._applyEntities();
       this._header();
+      if (!newView && this._weatherCheck()) return;
       if (newView) {
         this._pickMode();
         if (this._renderer) this._build(true);
@@ -115,6 +117,7 @@ class ToonHouseCard extends HTMLElement {
   set hass(hass) {
     this._hass = hass;
     if (!this._devs) return;
+    if (this._weatherCheck()) return;
     const sig = this._signature();
     if (sig !== this._sig) {
       this._sig = sig;
@@ -142,6 +145,7 @@ class ToonHouseCard extends HTMLElement {
       button{pointer-events:auto;font:inherit;font-weight:800;font-size:14px;padding:7px 12px;border:3px solid #1b1b1b;border-radius:12px;background:#fff;color:#1b1b1b;cursor:pointer;box-shadow:2px 3px 0 #1b1b1b}
       button.on{background:#FFD83A}
       button.warn{background:#FF8A3D;margin-left:auto}
+      .wx{font-weight:800;font-size:13px;padding:3px 10px;border:3px solid #1b1b1b;border-radius:999px;background:#fff;box-shadow:2px 3px 0 #1b1b1b}
       .labels{position:absolute;inset:0;pointer-events:none;overflow:hidden}
       .rl{position:absolute;transform:translate(-50%,-50%);font-weight:900;font-size:13px;white-space:nowrap;text-shadow:-2px 0 #fff,2px 0 #fff,0 -2px #fff,0 2px #fff,-1px -1px #fff,1px 1px #fff,-1px 1px #fff,1px -1px #fff}
       .chip{position:absolute;transform:translate(-50%,-140%);pointer-events:auto;cursor:pointer;font-weight:900;font-size:12px;padding:2px 7px;border:2px solid #1b1b1b;border-radius:10px;background:#fff;white-space:nowrap;box-shadow:1px 2px 0 #1b1b1b}
@@ -153,7 +157,7 @@ class ToonHouseCard extends HTMLElement {
     </style>
     <ha-card><div class="wrap">
       <div class="labels"></div>
-      <div class="bar"><h1></h1><span class="modes" style="display:contents"></span><button class="warn" style="display:none">!</button></div>
+      <div class="bar"><h1></h1><span class="modes" style="display:contents"></span><span class="wx" style="display:none"></span><button class="warn" style="display:none">!</button></div>
       <div class="toast"></div>
       <div class="foot"><span class="counts"></span><span>Drag to turn, pinch or scroll to zoom. Tap a device.</span></div>
     </div></ha-card>`;
@@ -205,7 +209,7 @@ class ToonHouseCard extends HTMLElement {
   _prepare() {
     const L = this._layout;
     if (!L || !Array.isArray(L.floors) || !L.floors.length) throw new Error('it needs a "floors" list with at least one floor');
-    this.theme = resolveTheme(this._config.theme || L.theme, { ...(L.colours || {}), ...(this._config.colours || {}) });
+    this.theme = this._theme0 = resolveTheme(this._config.theme || L.theme, { ...(L.colours || {}), ...(this._config.colours || {}) });
     this._H = L.storey_height || 2.4;
     this._warnings = [];
     let bed = 0;
@@ -296,16 +300,26 @@ class ToonHouseCard extends HTMLElement {
     this._wrap.insertBefore(renderer.domElement, this._wrap.firstChild);
     this._scene = new T.Scene();
     this._camera = new T.PerspectiveCamera(32, 1, 0.5, 600);
-    this._scene.add(new T.HemisphereLight(0xffffff, 0xd8cbb8, 1.55));
-    const sun = new T.DirectionalLight(0xffffff, 2.1);
+    const hemi = new T.HemisphereLight(0xffffff, 0xd8cbb8, 1.55), sun = new T.DirectionalLight(0xffffff, 2.1);
     sun.position.set(-9, 14, 12);
-    this._scene.add(sun);
+    this._scene.add(hemi, sun);
+    this._wx = new Weather(this._scene, hemi, sun, (g, m, grow) => this._outlined(g, m, grow));
+    // rain and snow only fall while the card is on screen
+    this._seen = true;
+    this._io = new IntersectionObserver((e) => { this._seen = e[e.length - 1].isIntersecting; if (this._seen) this._req(); });
+    this._io.observe(this._wrap);
+    this._onShow = () => { if (!document.hidden) this._req(); };
+    document.addEventListener("visibilitychange", this._onShow);
     this._controls = new OrbitControls(this._camera, renderer.domElement);
     this._controls.enableDamping = false;
     this._controls.minDistance = 4;
     this._controls.maxDistance = 160;
     this._controls.maxPolarAngle = 1.48;
-    this._controls.addEventListener("change", () => this._req());
+    this._controls.addEventListener("change", () => {
+      // mist stays the same thickness on the house however far the view is zoomed
+      if (this._wx) this._wx.range(this._camera.position.distanceTo(this._controls.target));
+      this._req();
+    });
     const el = renderer.domElement;
     this._onDown = (e) => { this._down = [e.clientX, e.clientY]; };
     this._onUp = (e) => {
@@ -326,7 +340,12 @@ class ToonHouseCard extends HTMLElement {
     this._ro = null;
     if (this._controls) this._controls.dispose();
     this._controls = null;
+    if (this._io) this._io.disconnect();
+    this._io = null;
+    document.removeEventListener("visibilitychange", this._onShow);
     this._clear();
+    if (this._wx) this._wx.dispose();
+    this._wx = null;
     if (this._renderer) {
       const el = this._renderer.domElement;
       el.removeEventListener("pointerdown", this._onDown);
@@ -487,8 +506,12 @@ class ToonHouseCard extends HTMLElement {
 
   // ---------- building the scene ----------
   _build(resetView) {
+    const sky = this._weather();
+    this.theme = tintTheme(this._theme0, sky.w, sky.lit);
+    this._tintKey = tintKey(sky.w, sky.lit);
     const C = this.theme, H = this._H, cut = this._config.cut_height, mode = this._mode;
     this._clear();
+    this._cloudMats = [];
     const g = new T.DataTexture(new Uint8Array(C.shade), C.shade.length, 1, T.RedFormat);
     g.minFilter = g.magFilter = T.NearestFilter;
     g.needsUpdate = true;
@@ -512,7 +535,36 @@ class ToonHouseCard extends HTMLElement {
     this._sig = this._signature();
     this._syncDevices();
     if (resetView) this._view();
+    this._applyWeather(sky.w);
     this._req();
+  }
+  // ---------- weather ----------
+  _weather() {
+    const w = readWeather(this._hass, this._config);
+    // at night the windows glow if a light is on indoors
+    const lit = !!(w && w.night && this._hass && (this._floors || []).some((F) => (F.floor.devices || []).some((d) => d.kind === "light" && d.entity && (this._hass.states[d.entity] || {}).state === "on")));
+    return { w, lit };
+  }
+  _applyWeather(w) {
+    if (!this._wx || !this._root) return;
+    const P = this._plot, far = Math.max(P.x1 - P.x0, P.front - P.back);
+    this._wxKey = weatherKey(w);
+    this._wx.apply(w, { theme: this.theme, box: { cx: (P.x0 + P.x1) / 2, cz: (P.back + P.front) / 2, far }, whole: this._mode === "whole", clouds: this._cloudMats, sunBall: this._sunBall, sunMat: this._sunMat, dist: this._camera.position.distanceTo(this._controls.target) || this._dist });
+    this.shadowRoot.querySelector("ha-card").style.background = `#${this._scene.background.getHexString()}`;
+    const chip = this.shadowRoot.querySelector(".wx"), text = w ? [w.text, w.temp].filter(Boolean).join(" ") : "";
+    chip.textContent = text;
+    chip.style.display = text ? "" : "none";
+    this._last = 0;
+  }
+  // the weather changed: redo the sky, or the whole house if snow has settled or the windows should glow. true if it rebuilt.
+  _weatherCheck() {
+    if (!this._renderer || !this._root) return false;
+    const sky = this._weather();
+    if (tintKey(sky.w, sky.lit) !== this._tintKey) { this._build(false); return true; }
+    const chip = sky.w ? [sky.w.text, sky.w.temp].filter(Boolean).join(" ") : "";
+    if (weatherKey(sky.w) !== this._wxKey) { this._applyWeather(sky.w); this._req(); }
+    else if (chip !== this.shadowRoot.querySelector(".wx").textContent) { const el = this.shadowRoot.querySelector(".wx"); el.textContent = chip; el.style.display = chip ? "" : "none"; }
+    return false;
   }
   _view() {
     const mode = this._mode, w = this._wrap.clientWidth, h = this._wrap.clientHeight;
@@ -523,6 +575,7 @@ class ToonHouseCard extends HTMLElement {
     const whole = mode === "whole", top = this._floors.length * (this._H + GAP);
     const t = whole ? [cx, top * 0.4, cz + size * 0.1] : [cx, this._floors[mode].baseY + 0.4, cz + size * 0.04];
     const d = new T.Vector3(...(whole ? [0.46, 0.36, 0.81] : [0.22, 0.8, 0.56])).normalize().multiplyScalar((whole ? size * 3.3 + top * 0.8 : size * 2.45) * fit);
+    this._dist = d.length();
     this._controls.target.set(...t);
     this._camera.position.set(t[0] + d.x, t[1] + d.y, t[2] + d.z);
     this._controls.update();
@@ -631,6 +684,7 @@ class ToonHouseCard extends HTMLElement {
     for (const [fx, y, fz, s] of [[-0.9, 10, -0.5, 1.5], [1.3, 12, -0.2, 1.9], [0.4, 14, -1.3, 2.3], [-1.1, 9, 0.6, 1.2], [1.6, 15, -1.2, 2.0]]) {
       for (const [dx, dy, dz, r] of [[0, 0, 0, 1], [1.1, -0.15, 0.1, 0.75], [-1.1, -0.2, 0, 0.7], [0.3, 0.45, -0.1, 0.7]]) {
         const puff = this._outlined(new T.SphereGeometry(r * s, 16, 10), white(), 0.09);
+        this._cloudMats.push(puff.userData.mesh.material);
         puff.position.set(cx + fx * far * 0.55 + dx * s, y + dy * s, (P.back + P.front) / 2 + fz * far * 0.5 + dz * s);
         puff.scale.y = 0.7;
         g.add(puff);
@@ -639,6 +693,8 @@ class ToonHouseCard extends HTMLElement {
     const sunBall = this._outlined(new T.SphereGeometry(2.4, 24, 16), new T.MeshBasicMaterial({ color: C.sun }), 0.12);
     sunBall.position.set(cx + far * 0.9, 19, P.back - far * 0.4);
     g.add(sunBall);
+    this._sunBall = sunBall;
+    this._sunMat = sunBall.userData.mesh.material;
     root.add(g);
   }
 
@@ -1130,6 +1186,14 @@ class ToonHouseCard extends HTMLElement {
   _frame() {
     if (!this._renderer || !this._root) return;
     const now = performance.now();
+    if (this._wx && this._wx.moving && this._seen && !document.hidden) {
+      // falling rain and snow: keep drawing, at about 30 pictures a second
+      this._req();
+      const dt = now - (this._last || 0);
+      if (this._last && dt < 30 && !this._tweens.length) return;
+      this._wx.step(this._last ? Math.min(dt, 100) / 1000 : 0, now);
+      this._last = now;
+    }
     if (this._tweens.length) {
       this._tweens = this._tweens.filter((dev) => {
         const k = Math.min(1, (now - dev.t0) / 900), e = k * k * (3 - 2 * k);
