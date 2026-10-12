@@ -79,7 +79,7 @@
   function make() {
     if (card) card.remove();
     card = document.createElement("toon-house-card");
-    config = { type: "custom:toon-house-card", layout: url, view: q.get("view") || "outside", ...(theme ? { theme } : {}), ...(config && config.entities ? { entities: config.entities } : {}) };
+    config = { type: "custom:toon-house-card", layout: url, view: q.get("view") || "outside", ...(theme ? { theme } : {}), ...(config && config.entities ? { entities: config.entities } : {}), ...(config && config.devices ? { devices: config.devices } : {}) };
     card.setConfig({ height: "100vh", ...config });
     document.getElementById("host").appendChild(card);
     card.addEventListener("hass-more-info", (e) => toast(`In Home Assistant this opens the controls for ${e.detail.entityId}.`));
