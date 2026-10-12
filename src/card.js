@@ -10,7 +10,7 @@ import { floorWalls, faceWithCutouts, bbox, roomPoints, uncovered, EXT_WALL } fr
 import { resolveTheme, roomStyle, drawPattern, PATTERN_SIZE } from "./theme.js";
 import { furnitureParts } from "./furniture.js";
 
-const VERSION = "0.1.0";
+const VERSION = "0.2.0";
 const SILL = 0.9, HEAD = 2.1, DOOR_HEAD = 2.05, GAP = 0.2;
 const tex = (pattern, a, b) => `tex|${pattern}|${a}|${b || ""}`;
 const esc = (s) => String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/"/g, "&quot;");

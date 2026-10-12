@@ -6,7 +6,9 @@ The importer turns a picture of a floor plan into a house file. It runs in your 
 
 ## Open it
 
-From a copy of this project:
+**[https://digitaladaption.github.io/toon-house-card/importer/](https://digitaladaption.github.io/toon-house-card/importer/)**
+
+Or run it from a copy of this project:
 
 ```bash
 python3 -m http.server 8000

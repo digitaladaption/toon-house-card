@@ -4,6 +4,8 @@ A cartoon 3D dollhouse of your home for Home Assistant. You describe your rooms,
 
 ![The example house from outside](docs/img/outside.png)
 
+**Try it now:** [turn your floor plan picture into a house](https://digitaladaption.github.io/toon-house-card/importer/) · [play with the example house](https://digitaladaption.github.io/toon-house-card/demo/)
+
 | Ground floor | Upstairs | "brick" theme |
 |---|---|---|
 | ![Ground floor cutaway](docs/img/ground.png) | ![Upstairs cutaway](docs/img/upstairs.png) | ![Brick theme](docs/img/brick-theme.png) |
@@ -78,7 +80,7 @@ layout: /local/toon-house/house.json
 
 ## Start from a floor plan picture
 
-If you have a picture of your floor plan, the importer finds the rooms, doors and windows for you and writes the house file. It runs in your browser and the picture stays on your computer.
+**[Open the importer](https://digitaladaption.github.io/toon-house-card/importer/)** and drop in a picture of your floor plan. It finds the rooms, doors and windows and writes the house file for you. It runs in your browser and the picture stays on your computer.
 
 ![The importer](docs/img/importer.png)
 
@@ -132,7 +134,7 @@ Place a device either at a spot (`x`, `y`) or on a wall (`room`, `wall`, `at`). 
 
 ## Try it without Home Assistant
 
-The `demo` folder is a stand-alone page with stand-in devices.
+The [demo page](https://digitaladaption.github.io/toon-house-card/demo/) shows the example house with stand-in devices. To run it and the importer from your own copy instead:
 
 ```bash
 python3 -m http.server 8000
