@@ -611,8 +611,12 @@ function dragEnd(d) {
     if (Math.abs(d.x1 - d.x0) < 3 * S.ppm || Math.abs(d.y1 - d.y0) < 3 * S.ppm) { status("Drag a bigger box, right round the floor."); return; }
     remember();
     const box = { x0: Math.round(Math.max(0, Math.min(d.x0, d.x1))), y0: Math.round(Math.max(0, Math.min(d.y0, d.y1))), x1: Math.round(Math.min(S.W - 1, Math.max(d.x0, d.x1))), y1: Math.round(Math.min(S.H - 1, Math.max(d.y0, d.y1))) };
-    // a new box replaces any floor it mostly covers
-    S.floors = S.floors.filter((f) => !(f.box.x0 >= box.x0 - 10 && f.box.x1 <= box.x1 + 10 && f.box.y0 >= box.y0 - 10 && f.box.y1 <= box.y1 + 10));
+    // a new box replaces any floor it overlaps by more than half (of the smaller of the two)
+    const shared = (q) => {
+      const w = Math.min(q.x1, box.x1) - Math.max(q.x0, box.x0), h = Math.min(q.y1, box.y1) - Math.max(q.y0, box.y0);
+      return w > 0 && h > 0 ? (w * h) / Math.min((q.x1 - q.x0) * (q.y1 - q.y0), (box.x1 - box.x0) * (box.y1 - box.y0)) : 0;
+    };
+    S.floors = S.floors.filter((f) => shared(f.box) <= 0.5);
     S.floors.push(newFloor(box, S.floors.length));
     S.floors.sort((a, b) => a.box.x0 - b.box.x0 || a.box.y0 - b.box.y0);
     S.floors.forEach((f, i) => { if (/^(Ground|Upstairs|Floor \d+)$/.test(f.name)) f.name = newFloor(f.box, i).name; });

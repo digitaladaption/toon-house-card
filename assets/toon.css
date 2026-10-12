@@ -17,7 +17,8 @@ body.toon::before{content:"";position:fixed;inset:0 -900px 0 0;z-index:-1;pointe
 h1,h2,h3{font-weight:700;margin:0}
 .panel{background:var(--paper);border:var(--line) solid var(--ink);border-radius:var(--r);box-shadow:var(--drop)}
 .btn{font:inherit;font-weight:700;font-size:16px;min-height:44px;padding:8px 14px;border:var(--line) solid var(--ink);border-radius:14px;background:var(--white);color:var(--ink);cursor:pointer;box-shadow:2px 3px 0 var(--ink);display:inline-flex;align-items:center;justify-content:center;gap:8px;text-decoration:none;transition:transform .08s,box-shadow .08s;user-select:none}
-.btn:hover{transform:translate(-1px,-1px) rotate(-1deg);box-shadow:3px 4px 0 var(--ink)}
+/* only where there is a real pointer: on touch screens hover sticks after a tap */
+@media (hover:hover){.btn:hover{transform:translate(-1px,-1px) rotate(-1deg);box-shadow:3px 4px 0 var(--ink)}}
 .btn:active{transform:translate(2px,3px);box-shadow:0 0 0 var(--ink)}
 .btn.on,.btn.go{background:var(--sun)}
 .btn.big{font-size:20px;min-height:56px;padding:10px 22px;border-radius:18px}
@@ -27,4 +28,4 @@ h1,h2,h3{font-weight:700;margin:0}
 input.toon,select.toon{font:inherit;font-size:17px;min-height:44px;padding:6px 12px;border:var(--line) solid var(--ink);border-radius:12px;background:var(--white);color:var(--ink);min-width:0}
 input.toon:focus,.btn:focus-visible{outline:4px solid var(--door);outline-offset:2px}
 .toast{position:fixed;left:50%;bottom:90px;transform:translateX(-50%);z-index:50;max-width:min(92vw,520px);padding:12px 18px;background:var(--white);border:var(--line) solid var(--ink);border-radius:16px;box-shadow:var(--drop);font-weight:700;display:none}
-@media (prefers-reduced-motion:reduce){body.toon::before{animation:none}.btn{transition:none}.btn:hover{transform:none}}
+@media (prefers-reduced-motion:reduce){body.toon::before{animation:none}.btn{transition:none}.btn:hover{transform:none !important}}
