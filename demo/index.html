@@ -45,6 +45,8 @@
   try { layout = await (await fetch(url)).json(); } catch (e) { /* the card shows the problem */ }
   const states = {};
   let lights = true, heat = true, cover = 40;
+  window.who = { "person.mum": "home", "sensor.mum_room": "Kitchen", "person.dad": "home", "sensor.mia_room": "Lounge", "sensor.jo_room": "Nursery" };
+  window.demoPush = () => push();
   const temps = {}, dims = {};
   let weather = q.get("weather") || "sunny", night = q.has("night");
   const devices = (layout.floors || []).flatMap((f) => f.devices || []).filter((d) => d.entity);
@@ -130,6 +132,8 @@
     document.getElementById("lights").classList.toggle("on", lights);
     document.getElementById("heat").classList.toggle("on", heat);
     states["weather.home"] = { entity_id: "weather.home", state: weather, attributes: { friendly_name: "Home", temperature: weather === "snowy" ? -1 : 14 } };
+    // who is where: a room sensor per person (Bluetooth tracking makes these), and home or away from a phone
+    for (const [id, v] of Object.entries(window.who)) states[id] = { entity_id: id, state: v, attributes: {} };
     states["sun.sun"] = { entity_id: "sun.sun", state: night ? "below_horizon" : "above_horizon", attributes: {} };
     document.getElementById("night").classList.toggle("on", night);
     const hass = { states: { ...states }, areas, entities, devices: {}, callService, callWS };
@@ -139,7 +143,7 @@
   function make() {
     if (card) card.remove();
     card = document.createElement("toon-house-card");
-    config = { type: "custom:toon-house-card", layout: url, view: q.get("view") || "outside", weather: config && "weather" in config ? config.weather : "weather.home", ...(config && config.quality ? { quality: config.quality } : q.get("quality") ? { quality: q.get("quality") } : {}), ...(theme ? { theme } : {}), ...(config && config.entities ? { entities: config.entities } : {}), ...(config && config.devices ? { devices: config.devices } : {}) };
+    config = { type: "custom:toon-house-card", layout: url, view: q.get("view") || "outside", weather: config && "weather" in config ? config.weather : "weather.home", ...(q.has("people") ? { people: [{ name: "Mum", look: "mum", person: "person.mum", room: "sensor.mum_room" }, { name: "Dad", look: { type: "dad", glasses: true }, person: "person.dad" }, { name: "Mia", look: "girl", room: "sensor.mia_room" }, { name: "Baby Jo", look: "baby", room: "sensor.jo_room" }] } : {}), ...(config && config.quality ? { quality: config.quality } : q.get("quality") ? { quality: q.get("quality") } : {}), ...(theme ? { theme } : {}), ...(config && config.entities ? { entities: config.entities } : {}), ...(config && config.devices ? { devices: config.devices } : {}) };
     card.setConfig({ height: "100vh", ...config });
     document.getElementById("host").appendChild(card);
     card.addEventListener("hass-more-info", (e) => toast(`In Home Assistant this opens the controls for ${e.detail.entityId}.`));

@@ -59,3 +59,15 @@ const things = areaThings(h2, "lounge", { "light.used": "x" });
 assert.deepEqual(things.map((t) => `${t.id}:${t.kind}:${t.sure ? 1 : 0}`), ["light.a:light:1", "cover.b:cover:1", "binary_sensor.m:motion:1", "media_player.tv:tv:1", "switch.plug:switch:0", "sensor.temp:sensor:0"], "the area's things by kind; used, diagnostic and odd ones left out; plugs and readings offered but not ticked");
 assert.equal(kindFor(h2, "sensor.power"), null);
 console.log("area tests passed");
+
+// the family faces must be well-formed, or a browser will not draw them as a picture
+import { avatar, LOOKS, lookOf } from "../src/people.js";
+for (const look of [...LOOKS, { type: "dad", beard: true, glasses: true }, { type: "girl", glasses: true, skin: "brown" }, "nobody"]) {
+  const svg = avatar(look, "#fff");
+  for (const tag of svg.match(/<[a-zA-Z][^>]*>/g)) {
+    const names = [...tag.matchAll(/\s([a-zA-Z-]+)=/g)].map((m) => m[1]);
+    assert.equal(new Set(names).size, names.length, `repeated attribute in ${tag.slice(0, 70)}`);
+  }
+}
+assert.equal(lookOf("nobody").type, "dad", "an unknown look falls back to a plain one");
+console.log("people tests passed");

@@ -13,10 +13,13 @@ import { applyOverlay } from "./layout.js";
 import { ensureFont, FONT } from "./font.js";
 import { RoomPanel, ROOM_STYLE } from "./room.js";
 import { Replay, REPLAY_STYLE } from "./replay.js";
+import { avatar, COLOURS } from "./people.js";
+import { roomWords } from "./match.js";
 import { Weather, readWeather, weatherKey, tintTheme, tintKey } from "./weather.js";
 import "./editor.js";
+import "./family.js";
 
-const VERSION = "0.8.1";
+const VERSION = "0.9.0";
 const SILL = 0.9, HEAD = 2.1, DOOR_HEAD = 2.05, GAP = 0.2;
 const tex = (pattern, a, b) => `tex|${pattern}|${a}|${b || ""}`;
 const esc = (s) => String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/"/g, "&quot;");
@@ -129,6 +132,7 @@ class ToonHouseCard extends HTMLElement {
   }
   _hassChanged() {
     if (this._room) this._room.refresh();
+    if (this._root && this._peopleSig() !== this._peopleKey) { this._placePeople(); this._req(); }
     if (!this._devs) return;
     if (this._weatherCheck()) return;
     const sig = this._signature();
@@ -164,6 +168,7 @@ class ToonHouseCard extends HTMLElement {
       .rl{position:absolute;transform:translate(-50%,-50%);font-weight:900;font-size:13px;white-space:nowrap;text-shadow:-2px 0 #fff,2px 0 #fff,0 -2px #fff,0 2px #fff,-1px -1px #fff,1px 1px #fff,-1px 1px #fff,1px -1px #fff}
       .chip{position:absolute;transform:translate(-50%,-140%);pointer-events:auto;cursor:pointer;font-weight:900;font-size:12px;padding:2px 7px;border:2px solid #1b1b1b;border-radius:10px;background:#fff;white-space:nowrap;box-shadow:1px 2px 0 #1b1b1b}
       .chip.active{background:#FFD83A}
+      .rl.who{font-size:12px;background:#fff;border:2px solid #1b1b1b;border-radius:9px;padding:0 6px;text-shadow:none}
       .toast{position:absolute;left:50%;bottom:44px;transform:translateX(-50%);padding:8px 14px;border:3px solid #1b1b1b;border-radius:12px;background:#fff;font-weight:800;font-size:14px;box-shadow:2px 3px 0 #1b1b1b;display:none;pointer-events:auto;cursor:pointer;max-width:86%;text-align:left;white-space:pre-line}
       .foot{position:absolute;left:12px;bottom:8px;right:12px;font-size:12px;font-weight:700;text-shadow:0 0 3px #fff,0 0 3px #fff;pointer-events:none;display:flex;gap:14px;flex-wrap:wrap}
       .err{padding:18px;background:#fff;white-space:pre-line}
@@ -572,6 +577,7 @@ class ToonHouseCard extends HTMLElement {
     }
     this._pickables = [];
     this._roomLabels = [];
+    this._peopleKey = null;
     this._tweens = [];
     this._outside(root);
     this._floors.forEach((F, i) => {
@@ -584,12 +590,94 @@ class ToonHouseCard extends HTMLElement {
     this._sig = this._signature();
     this._syncDevices();
     if (resetView) this._view();
+    this._placePeople();
     this._applyWeather(sky.w);
     this._req();
   }
   // light detail: asked for in the settings, or switched to because rain or snow was making the card stutter
   _low() {
     return this._gfx === "light" || (this._gfx === "auto" && !!this._autoLow);
+  }
+  // ---------- the family, standing where they are ----------
+  _peopleSig() {
+    const h = this._hass, st = (id) => (id && h && h.states[id] ? h.states[id].state : "");
+    return `${this._mode}|${(this._config.people || []).map((p) => `${st(p.person)},${st(p.room)}`).join(";")}`;
+  }
+  // the room a sensor is naming ("Lounge" finds a room called Living room): { fi, room } or null
+  _roomNamed(text) {
+    const want = String(text || "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+    if (!want || ["unknown", "unavailable", "not home", "none", "away"].includes(want)) return null;
+    for (const [fi, F] of this._floors.entries()) for (const room of F.floor.rooms) {
+      if (!room.name) continue;
+      if (roomWords(room.name).includes(want) || roomWords(want).includes(roomWords(room.name)[0]) || String(room.area || "").toLowerCase() === want || room.id === want) return { fi, room };
+    }
+    return null;
+  }
+  _placePeople() {
+    const list = this._config.people || [], h = this._hass;
+    if (this._peopleGroup) {
+      this._peopleGroup.traverse((o) => { if (o.material) { if (o.material.map) o.material.map.dispose(); o.material.dispose(); } });
+      this._root.remove(this._peopleGroup);
+    }
+    (this._peopleTags || []).forEach((t) => t.el.remove());
+    this._peopleTags = [];
+    this._peopleGroup = null;
+    this._peopleKey = this._peopleSig();
+    this._peopleWhere = {};
+    if (!list.length || !h || !this._root) return;
+    const g = (this._peopleGroup = new T.Group()), mode = this._mode, seen = {};
+    this._root.add(g);
+    const ground = this._floors[0], door = ground.walls.openings.find((o) => o.kind === "frontdoor"), P = this._plot;
+    list.forEach((p, i) => {
+      const name = p.name || `Person ${i + 1}`, st = (id) => (id && h.states[id] ? h.states[id].state : null);
+      const hit = this._roomNamed(st(p.room)), home = p.person ? st(p.person) === "home" : null;
+      let pos = null, where = "away";
+      if (hit) {
+        where = hit.room.name;
+        if (mode === hit.fi) {
+          const F = this._floors[hit.fi], b = bbox(hit.room.points);
+          let c = [(b.x0 + b.x1) / 2, (b.y0 + b.y1) / 2];
+          if ((F.walls.roomAt(c[0], c[1]) || {}).id !== hit.room.id) c = hit.room.label || hit.room.points.reduce((a, q) => [a[0] + q[0] / hit.room.points.length, a[1] + q[1] / hit.room.points.length], [0, 0]);
+          const k = (seen[`${hit.fi}|${hit.room.id}`] = (seen[`${hit.fi}|${hit.room.id}`] || 0) + 1) - 1, spread = Math.min(1, (b.x1 - b.x0) / 4);
+          pos = [F.off[0] + c[0] + (k % 2 ? 1 : -1) * Math.ceil(k / 2) * spread, F.baseY + 1.05, F.off[1] + c[1] + 0.45];
+        }
+      } else if (home === true || (home === null && !p.room)) {
+        // at home, but nothing says which room: out by the front door
+        where = "home";
+        if (mode === "whole" || mode === 0) {
+          const k = (seen.door = (seen.door || 0) + 1) - 1;
+          const x = door ? (door.b[0] + door.b[2]) / 2 + ground.off[0] : (P.x0 + P.x1) / 2, z = door ? (door.b[1] + door.b[3]) / 2 + ground.off[1] + door.n[1] * 1.5 : P.front - 2, dx = door ? door.n[0] * 1.5 : 0;
+          pos = [x + dx + (k % 2 ? 1 : -1) * Math.ceil(k / 2) * 0.95 + 1.3, 1.0, z];
+        }
+      }
+      this._peopleWhere[name] = { where, shown: !!pos };
+      if (!pos) return;
+      const tex = new T.Texture(), mat = new T.SpriteMaterial({ map: tex, transparent: true, depthWrite: false, fog: false }), sp = new T.Sprite(mat);
+      tex.colorSpace = T.SRGBColorSpace;
+      sp.scale.set(1.05, 1.05, 1);
+      sp.position.set(...pos);
+      sp.renderOrder = 5;
+      sp.visible = false;
+      const colour = p.colour || COLOURS[i % COLOURS.length], img = new Image(), pic = p.picture || (!p.look && p.person && h.states[p.person] && h.states[p.person].attributes.entity_picture) || "";
+      img.crossOrigin = "anonymous";
+      img.onload = () => {
+        const c = document.createElement("canvas"), x = c.getContext("2d");
+        c.width = c.height = 160;
+        if (pic) { x.fillStyle = colour; x.beginPath(); x.arc(80, 80, 74, 0, 7); x.fill(); x.save(); x.clip(); x.drawImage(img, 6, 6, 148, 148); x.restore(); x.lineWidth = 8; x.strokeStyle = "#1b1b1b"; x.beginPath(); x.arc(80, 80, 74, 0, 7); x.stroke(); }
+        else x.drawImage(img, 0, 0, 160, 160);
+        tex.image = c;
+        tex.needsUpdate = true;
+        sp.visible = true;
+        this._req();
+      };
+      img.src = pic || `data:image/svg+xml;charset=utf-8,${encodeURIComponent(avatar(p.look, colour).replace("<svg ", '<svg width="160" height="160" '))}`;
+      g.add(sp);
+      const el = document.createElement("div");
+      el.className = "rl who";
+      el.textContent = name;
+      this._labels.appendChild(el);
+      this._peopleTags.push({ el, pos: new T.Vector3(pos[0], pos[1] - 0.72, pos[2]) });
+    });
   }
   // ---------- weather ----------
   _weather() {
@@ -1294,6 +1382,7 @@ class ToonHouseCard extends HTMLElement {
     };
     const far = this._camera.position.distanceTo(this._controls.target) > 42;
     for (const l of this._roomLabels) place(l.el, l.pos, !(far && l.small));
+    for (const t of this._peopleTags || []) place(t.el, t.pos, true);
     const whole = this._mode === "whole";
     for (const dev of this._devs) {
       if (!dev.chip) continue;

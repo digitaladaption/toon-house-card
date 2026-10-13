@@ -24,6 +24,7 @@ A cartoon 3D dollhouse of your home for Home Assistant. You describe your rooms,
 - **Tap to control.** Tapping a light or switch toggles it. Tapping anything else opens its normal Home Assistant details. Hold a lamp for its colour and other controls.
 - **Tap a room.** A panel lists everything in it: switch and dim the lights, move the blinds, turn the radiator up or down.
 - **Replay the day.** Wind the house back through the last 24 hours and watch the lights, blinds, heating and weather as they were.
+- **The family too.** A cartoon week calendar with a face for each person, a chore chart where chores win stars, and the family standing in the rooms they are in.
 - **Fills itself in.** If your devices have areas in Home Assistant, the editor can sort them into the right rooms for you.
 - **A cartoon editor.** Tap a light, blind or radiator and a little house called Roofus helps you set it up: pick the real device, try it, done. No code needed.
 - **Plan ahead.** A device with no entity is drawn grey as "planned", so you can lay out kit you have not bought yet.
@@ -155,6 +156,82 @@ What you add, move and connect is saved in the card's own settings, not in the h
 
 ![Replaying the day](docs/img/replay.png)
 
+## The family: calendar, chores and who is where
+
+The same file brings two more cards, in the same cartoon style, for a family wall tablet. They run on what Home Assistant already has, so there is nothing else to install. Try them on the [family demo](https://digitaladaption.github.io/toon-house-card/demo/family.html).
+
+| Calendar | Chores |
+|---|---|
+| ![The family calendar](docs/img/family-calendar.png) | ![The chore chart](docs/img/family-chores.png) |
+
+### People
+
+All three cards take the same `people` list. Each person gets a cartoon face: pick a ready-made `look` (`dad`, `mum`, `girl`, `boy`, `baby`, `gran`, `grandad`) or shape your own, and give them a `colour` if you like.
+
+```yaml
+people:
+  - name: Mum
+    look: mum
+  - name: Dad
+    look: { type: dad, glasses: true, beard: true, hair: "#222222", skin: brown, top: "#58C472" }
+  - name: Mia
+    look: girl
+    picture: /local/faces/mia.png     # or use your own picture instead of a drawn face
+```
+
+`skin` is `peach`, `fair`, `tan`, `brown`, `dark` or `sunny`, or any colour. Without a `look`, a person with a `person` entity uses that entity's picture.
+
+### Calendar card
+
+```yaml
+type: custom:toon-calendar-card
+title: Our week
+people:
+  - { name: Mum, look: mum, calendar: calendar.mum }
+  - { name: Dad, look: dad, calendar: calendar.dad }
+  - { name: Mia, look: girl, calendar: calendar.mia }
+calendars:
+  - { entity: calendar.family, name: Everyone }      # shared calendars get a little house
+homework: todo.homework                               # optional: a to-do list shown under the week
+```
+
+- A week from Monday, today picked out, with each event wearing its person's face and colour. On a phone the days stack.
+- **+ Add** puts something new on a person's calendar from the tablet: what, who, which day, and a time (or leave it empty for all day). It works with calendars Home Assistant can write to, such as a Local Calendar.
+- `homework` shows a to-do list as tickable stars, with the due day if the item has one.
+- Other options: `days` (1 to 14, default 7), `start: today` to begin at today instead of Monday, `homework_title`.
+
+### Chores card
+
+```yaml
+type: custom:toon-chores-card
+people:
+  - { name: Mia, look: girl, chores: todo.mia_chores, stars: counter.mia_stars }
+  - { name: Sam, look: boy, chores: todo.sam_chores, stars: counter.sam_stars }
+```
+
+- Each person's chores are a Home Assistant to-do list (Settings, Devices and services, Add integration, **Local To-do**). Tap a chore when it is done: it turns green, wins a star and Roofus cheers. Finish them all for confetti. Tap again to undo.
+- `stars` is optional: a **Counter** helper that keeps the running total. Without it, the stars shown are today's ticked chores.
+- **+ Add a chore** has ready-made ideas. **Grown-ups** shows a cross on each chore to take it away, and **Start a new day**, which unticks everything and keeps the stars.
+
+### Who is where, in the house
+
+Give the house card the same `people` and they stand in the rooms they are in:
+
+```yaml
+type: custom:toon-house-card
+layout: /local/toon-house/house.json
+people:
+  - { name: Mum, look: mum, person: person.mum, room: sensor.mum_phone_area }
+  - { name: Dad, look: dad, person: person.dad }
+```
+
+![The family in the house](docs/img/family-house.png)
+
+- `room` is any entity whose state is the name of a room or of a Home Assistant area. Bluetooth room tracking makes these (Bermuda or ESPresense, with a few cheap Bluetooth proxies round the house). "Lounge" finds a room called Living room.
+- `person` says home or away. Someone who is home, with nothing to say which room, stands by the front door. Someone away is not drawn.
+- A motion sensor only knows that somebody is in a room, not who, so the card never guesses a name from one.
+- People are drawn in the floor view for their floor, and they are part of Replay.
+
 ## Weather
 
 | Rain | Snow | Night |
@@ -194,6 +271,7 @@ Or pick it in the card editor under **The look → Weather outside**. Any Home A
 | `sun` | `sun.sun` | The entity that says whether it is night |
 | `quality` | `auto` | `full`, `light` (for older tablets), or `auto` to let the card choose |
 | `replay` | `true` | `false` hides the Replay button |
+| `people` | | The family, drawn in the rooms they are in. See [the family](#the-family-calendar-chores-and-who-is-where) |
 | `planned_path` | | A dashboard path to open when a planned (grey) device is tapped |
 
 ## Devices

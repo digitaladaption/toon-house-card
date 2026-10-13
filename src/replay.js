@@ -53,6 +53,7 @@ export class Replay {
     if (this.on || this.loading || !live || !live.callWS) return;
     const ids = new Set([card._config.weather, card._config.sun || "sun.sun"].filter((id) => id && id.includes(".")));
     for (const F of card._floors || []) for (const d of F.floor.devices || []) if (d.entity) ids.add(d.entity);
+    for (const p of card._config.people || []) for (const id of [p.person, p.room]) if (id) ids.add(id);
     this.end = Date.now();
     this.loading = true;
     card._say("Fetching the last day...", "", 20000);
