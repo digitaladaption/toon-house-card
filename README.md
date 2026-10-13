@@ -241,7 +241,7 @@ screensaver:
   weather: weather.home   # optional: the temperature under the clock
 ```
 
-Your pictures fade from one to the next with a big clock and the date. A touch brings the dashboard back, and that touch does not press whatever was underneath. After dark (by `sun.sun`) it dims; `dim: false` stops that, and `clock: false` hides the clock. Give every card on the tablet the same setting so it works on every page. To see it straight away, add `?screensaver` to the page address. [Try it on the demo](https://digitaladaption.github.io/toon-house-card/demo/?screensaver).
+Your pictures fade from one to the next with a big clock and the date. A touch brings the dashboard back, and that touch does not press whatever was underneath. After dark (by `sun.sun`) it dims; `dim: false` stops that. `clock: 24` or `clock: 12` picks the kind of clock (otherwise the device decides), and `clock: false` hides it. Give every card on the tablet the same setting so it works on every page. To see it straight away, add `?screensaver` to the page address. [Try it on the demo](https://digitaladaption.github.io/toon-house-card/demo/?screensaver).
 
 ### Who is where, in the house
 

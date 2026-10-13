@@ -1,6 +1,7 @@
 /* A screensaver for a wall tablet: after a while with nobody touching it, the screen shows your pictures,
    one after another, with a big clock. A touch brings the dashboard back. Any toon card can switch it on:
-     screensaver: { after: 300, every: 30, pictures: [/local/a.jpg, /local/b.jpg], clock: true }
+     screensaver: { after: 300, every: 30, pictures: [/local/a.jpg, /local/b.jpg], clock: 24 }
+   clock: 24 or 12 picks the kind of clock, true leaves it to the device, false hides it.
    One screensaver serves the whole page, whichever card asked for it. */
 import { ensureFont, FONT } from "./font.js";
 
@@ -26,7 +27,8 @@ const EVENTS = ["pointerdown", "keydown", "wheel", "touchstart"];
 
 function text() {
   const c = S.config, hass = S.hass, now = new Date(), w = c && c.weather && hass && hass.states[c.weather];
-  S.el.querySelector(".time").textContent = now.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  const kind = c ? Number(c.clock) : 0;
+  S.el.querySelector(".time").textContent = now.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", ...(kind === 24 ? { hourCycle: "h23" } : kind === 12 ? { hour12: true } : {}) });
   S.el.querySelector(".date").textContent = now.toLocaleDateString([], { weekday: "long", day: "numeric", month: "long" });
   S.el.querySelector(".wx").textContent = w && typeof w.attributes.temperature === "number" ? `${Math.round(w.attributes.temperature)}° outside` : "";
   const sun = hass && hass.states[(c && c.sun) || "sun.sun"];
