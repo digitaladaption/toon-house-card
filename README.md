@@ -198,6 +198,7 @@ homework: todo.homework                               # optional: a to-do list s
 - A week from Monday, today picked out, with each event wearing its person's face and colour. On a phone the days stack.
 - **+ Add** puts something new on a person's calendar from the tablet: what, who, which day, and a time (or leave it empty for all day). It works with calendars Home Assistant can write to, such as a Local Calendar.
 - `homework` shows a to-do list as tickable stars, with the due day if the item has one.
+- A person can have several calendars (`calendar: [calendar.mum, calendar.mum_work]`). All are drawn with their face; new events go on the first. Add `add: false` to a shared calendar that should only be shown, such as birthdays.
 - Other options: `days` (1 to 14, default 7), `start: today` to begin at today instead of Monday, `homework_title`.
 
 ### Chores card
@@ -212,6 +213,19 @@ people:
 - Each person's chores are a Home Assistant to-do list (Settings, Devices and services, Add integration, **Local To-do**). Tap a chore when it is done: it turns green, wins a star and Roofus cheers. Finish them all for confetti. Tap again to undo.
 - `stars` is optional: a **Counter** helper that keeps the running total. Without it, the stars shown are today's ticked chores.
 - **+ Add a chore** has ready-made ideas. **Grown-ups** shows a cross on each chore to take it away, and **Start a new day**, which unticks everything and keeps the stars.
+
+### Tabs between the pages
+
+On a wall tablet Home Assistant's own top bar is usually hidden, so all three cards can show the same row of big tabs. Give each card the same `links`:
+
+```yaml
+links:
+  - { name: House, path: /my-dashboard/house, icon: house }
+  - { name: Calendar, path: /my-dashboard/calendar, icon: calendar }
+  - { name: Chores, path: /my-dashboard/chores, icon: star }
+```
+
+The page you are on is picked out in yellow. Moving between pages does not reload Home Assistant, and `?kiosk` in the address is kept.
 
 ### Who is where, in the house
 
@@ -271,6 +285,7 @@ Or pick it in the card editor under **The look → Weather outside**. Any Home A
 | `sun` | `sun.sun` | The entity that says whether it is night |
 | `quality` | `auto` | `full`, `light` (for older tablets), or `auto` to let the card choose |
 | `replay` | `true` | `false` hides the Replay button |
+| `links` | | Big tabs to other dashboard pages: `[{ name, path, icon }]`. See [tabs](#tabs-between-the-pages) |
 | `people` | | The family, drawn in the rooms they are in. See [the family](#the-family-calendar-chores-and-who-is-where) |
 | `planned_path` | | A dashboard path to open when a planned (grey) device is tapped |
 

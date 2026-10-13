@@ -13,14 +13,13 @@
 </style>
 </head>
 <body class="toon">
-<div id="tabs"><button class="btn on" data-tab="calendar">Calendar</button><button class="btn" data-tab="chores">Chores</button><a class="btn" href="./">The house</a></div>
 <div id="host"></div>
 <script type="module">
   // A stand-in for Home Assistant: made-up people, calendars and to-do lists, kept in this page only.
   import "../dist/toon-house-card.js";
   const q = new URLSearchParams(location.search);
   const people = [
-    { name: "Mum", look: "mum", calendar: "calendar.mum" }, { name: "Dad", look: { type: "dad", glasses: true }, calendar: "calendar.dad" },
+    { name: "Mum", look: "mum", calendar: ["calendar.mum", "calendar.mum_work"] }, { name: "Dad", look: { type: "dad", glasses: true }, calendar: "calendar.dad" },
     { name: "Mia", look: "girl", calendar: "calendar.mia", chores: "todo.mia_chores", stars: "counter.mia_stars" }, { name: "Baby Jo", look: "baby", chores: "todo.jo_chores", stars: "counter.jo_stars" },
   ];
   const now = new Date(), mon = new Date(now.getFullYear(), now.getMonth(), now.getDate() - ((now.getDay() + 6) % 7));
@@ -32,6 +31,8 @@
     "calendar.mum": [timed("Yoga", 0, 18, 30), timed("Dentist", 2, 9, 15, 30), timed("Book club", 3, 19, 30, 90)],
     "calendar.dad": [timed("Five-a-side", 1, 19, 0), timed("Car service", 3, 8, 30, 30), allDay("Working away", 4)],
     "calendar.mia": [timed("Swimming", 0, 16, 0, 45), timed("Brownies", 2, 17, 30), timed("Party at Ava's", 5, 14, 0, 120), allDay("School trip", 3)],
+    "calendar.mum_work": [timed("Team meeting", 1, 10, 0)],
+    "calendar.birthdays": [allDay("Grandad's birthday", 2)],
     "calendar.family": [allDay("Bin day", 1), timed("Grandma for lunch", 6, 12, 30, 120), allDay("Half term", 5, 2)],
   };
   let uid = 0;
@@ -66,16 +67,17 @@
       rebuild(); card.hass = hass();
     },
   });
+  // the tabs each card can show; on this page they lead to the demo pages
+  const LINKS = [{ name: "House", path: "./index.html", icon: "house" }, { name: "Calendar", path: "./family.html?tab=calendar", icon: "calendar" }, { name: "Chores", path: "./family.html?tab=chores", icon: "star" }];
   let card;
   function show(tab) {
-    document.querySelectorAll("[data-tab]").forEach((b) => b.classList.toggle("on", b.dataset.tab === tab));
     if (card) card.remove();
     card = document.createElement(tab === "chores" ? "toon-chores-card" : "toon-calendar-card");
-    card.setConfig(tab === "chores" ? { type: "custom:toon-chores-card", people: people.filter((p) => p.chores) } : { type: "custom:toon-calendar-card", people, calendars: [{ entity: "calendar.family", name: "Everyone" }], homework: "todo.homework" });
+    card.setConfig(tab === "chores" ? { type: "custom:toon-chores-card", people: people.filter((p) => p.chores), links: LINKS } : { type: "custom:toon-calendar-card", people, calendars: [{ entity: "calendar.family", name: "Everyone" }, { entity: "calendar.birthdays", name: "Birthdays", add: false }], homework: "todo.homework", links: LINKS });
     document.getElementById("host").appendChild(card);
     rebuild(); card.hass = hass(); window.card = card;
   }
-  document.querySelectorAll("[data-tab]").forEach((b) => b.addEventListener("click", () => show(b.dataset.tab)));
+  if (!q.get("tab")) history.replaceState(null, "", "?tab=calendar");
   show(q.get("tab") || "calendar");
 </script>
 </body>

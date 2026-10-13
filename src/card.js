@@ -12,6 +12,7 @@ import { furnitureParts } from "./furniture.js";
 import { applyOverlay } from "./layout.js";
 import { ensureFont, FONT } from "./font.js";
 import { RoomPanel, ROOM_STYLE } from "./room.js";
+import { linksHtml, followLink, LINKS_STYLE } from "./links.js";
 import { Replay, REPLAY_STYLE } from "./replay.js";
 import { avatar, COLOURS } from "./people.js";
 import { roomWords } from "./match.js";
@@ -19,7 +20,7 @@ import { Weather, readWeather, weatherKey, tintTheme, tintKey } from "./weather.
 import "./editor.js";
 import "./family.js";
 
-const VERSION = "0.9.0";
+const VERSION = "0.9.1";
 const SILL = 0.9, HEAD = 2.1, DOOR_HEAD = 2.05, GAP = 0.2;
 const tex = (pattern, a, b) => `tex|${pattern}|${a}|${b || ""}`;
 const esc = (s) => String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/"/g, "&quot;");
@@ -172,12 +173,14 @@ class ToonHouseCard extends HTMLElement {
       .toast{position:absolute;left:50%;bottom:44px;transform:translateX(-50%);padding:8px 14px;border:3px solid #1b1b1b;border-radius:12px;background:#fff;font-weight:800;font-size:14px;box-shadow:2px 3px 0 #1b1b1b;display:none;pointer-events:auto;cursor:pointer;max-width:86%;text-align:left;white-space:pre-line}
       .foot{position:absolute;left:12px;bottom:8px;right:12px;font-size:12px;font-weight:700;text-shadow:0 0 3px #fff,0 0 3px #fff;pointer-events:none;display:flex;gap:14px;flex-wrap:wrap}
       .err{padding:18px;background:#fff;white-space:pre-line}
-      ${ROOM_STYLE}${REPLAY_STYLE}
+      ${ROOM_STYLE}${REPLAY_STYLE}${LINKS_STYLE}
+      .bar .links{margin-left:auto}
+      .bar .links+button.warn{margin-left:0}
       @media (max-width:600px){.rl{font-size:11px}.chip{font-size:11px;padding:1px 5px}h1{font-size:19px}.foot span+span{display:none}button{font-size:13px;padding:6px 9px}}
     </style>
     <ha-card><div class="wrap">
       <div class="labels"></div>
-      <div class="bar"><h1></h1><span class="modes" style="display:contents"></span><span class="wx" style="display:none"></span><button class="rp" style="display:none" title="See the last day again">Replay</button><button class="warn" style="display:none">!</button></div>
+      <div class="bar"><h1></h1><span class="modes" style="display:contents"></span><span class="wx" style="display:none"></span><button class="rp" style="display:none" title="See the last day again">Replay</button><span class="links"></span><button class="warn" style="display:none">!</button></div>
       <div class="toast"></div>
       <div class="foot"><span class="counts"></span><span>Drag to turn, pinch or scroll to zoom. Tap a device or a room. Hold a device for more.</span></div>
     </div></ha-card>`;
@@ -189,6 +192,7 @@ class ToonHouseCard extends HTMLElement {
       this._toast.style.display = "none";
       if (nav) this._navigate(nav);
     });
+    this.shadowRoot.querySelector(".links").addEventListener("click", (e) => followLink(e));
     this._room = new RoomPanel(this);
     this._replay = new Replay(this);
     this.shadowRoot.querySelector(".rp").addEventListener("click", () => (this._replay.on ? this._replay.stop() : this._replay.start()));
@@ -292,6 +296,7 @@ class ToonHouseCard extends HTMLElement {
     this._mode = idx >= 0 ? idx : /^\d+$/.test(first) && Number(first) < this._floors.length ? Number(first) : first === "ground" ? 0 : "whole";
   }
   _header() {
+    this.shadowRoot.querySelector(".links").innerHTML = linksHtml(this._config.links);
     this.shadowRoot.querySelector("h1").textContent = this._config.title != null ? this._config.title : (this._layout && this._layout.title) || "";
   }
   // links made in the editor ("entities" in the card settings) win over what the house file says

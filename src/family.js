@@ -3,11 +3,13 @@
 import { roofus, ICON } from "./art.js";
 import { ensureFont, FONT } from "./font.js";
 import { faceHtml, COLOURS } from "./people.js";
+import { linksHtml, followLink, LINKS_STYLE } from "./links.js";
 
 const esc = (s) => String(s == null ? "" : s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/"/g, "&quot;");
 const STAR = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" aria-hidden="true"><path d="M16 3.500l3.800 8 8.700 1.100-6.400 6 1.700 8.700L16 23l-7.800 4.300 1.700-8.700-6.400-6 8.700-1.100z" fill="var(--star,#fff)" stroke="#1b1b1b" stroke-width="2.400" stroke-linejoin="round"/></svg>`.replace(/\.(\d)00/g, ".$1");
 const IDEAS = ["Make my bed", "Brush my teeth", "Tidy my toys", "Get dressed", "Set the table", "Feed the pet", "Put clothes away", "Read a book"];
-const BASE = `
+const BASE = `${LINKS_STYLE}
+  .links{margin:0 0 10px}
   :host{display:block;font-family:${FONT};font-weight:500;color:#1b1b1b;--ink:#1b1b1b;--sun:#FFD83A;--paper:#FFFDF4}
   *{box-sizing:border-box}
   ha-card{display:block;background:linear-gradient(#6CCBFA,#9ADCFC);border:3px solid var(--ink);border-radius:18px;padding:12px;overflow:hidden;position:relative;min-height:var(--toon-family-min-h,0)}
@@ -96,7 +98,7 @@ class ToonChoresCard extends HTMLElement {
     if (!this.shadowRoot) {
       ensureFont();
       this.attachShadow({ mode: "open" });
-      this.shadowRoot.innerHTML = `<style>${BASE}${CHORE_STYLE}</style><ha-card><div class="top"><div class="roofus"></div><div class="bubble" aria-live="polite"></div></div><div class="kids"></div>
+      this.shadowRoot.innerHTML = `<style>${BASE}${CHORE_STYLE}</style><ha-card><div class="links"></div><div class="top"><div class="roofus"></div><div class="bubble" aria-live="polite"></div></div><div class="kids"></div>
         <div class="bar"><button class="btn" data-act="edit">Grown-ups</button></div>
         <dialog><h3></h3><label for="what">What is the chore?</label><input id="what" type="text" autocomplete="off" maxlength="60"><div class="row" id="ideas"></div><div class="row" style="justify-content:flex-end"><button class="btn" data-act="cancel">Not now</button><button class="btn go" data-act="add">${ICON.yes}Add it</button></div></dialog></ha-card>`;
       const root = this.shadowRoot, dlg = root.querySelector("dialog");
@@ -140,6 +142,7 @@ class ToonChoresCard extends HTMLElement {
   _render() {
     const root = this.shadowRoot, box = root.querySelector(".kids"), edit = this._edit;
     root.querySelector("ha-card").classList.toggle("edit", !!edit);
+    root.querySelector(".links").innerHTML = linksHtml(this._config.links);
     root.querySelector("[data-act='edit']").classList.toggle("on", !!edit);
     root.querySelector("[data-act='edit']").textContent = edit ? "Done" : "Grown-ups";
     let left = 0, total = 0;
@@ -161,6 +164,7 @@ class ToonChoresCard extends HTMLElement {
     this._say(title, text, mood);
   }
   async _click(e) {
+    if (followLink(e)) return;
     const root = this.shadowRoot, act = e.target.closest("[data-act]"), idea = e.target.closest("[data-idea]"), chore = e.target.closest(".chore");
     if (idea) { root.querySelector("#what").value = idea.dataset.idea; return; }
     if (act) {
@@ -277,13 +281,14 @@ class ToonCalendarCard extends HTMLElement {
     this._days = Math.max(1, Math.min(14, Number(config.days) || 7));
     // every calendar that is drawn, and whose face goes on its events
     this._sources = [];
-    this._people.forEach((p, i) => [].concat(p.calendar || []).forEach((entity) => this._sources.push({ entity, person: i, colour: p.colour, name: p.name })));
-    (config.calendars || []).forEach((c, i) => { const o = typeof c === "string" ? { entity: c } : c; if (o && o.entity) this._sources.push({ entity: o.entity, person: -1, colour: o.colour || "#FFFDF4", name: o.name || "", icon: o.icon }); });
+    // a person's first calendar is where "+ Add" puts their new events; the rest are only shown
+    this._people.forEach((p, i) => [].concat(p.calendar || []).forEach((entity, k) => this._sources.push({ entity, person: i, colour: p.colour, name: p.name, add: k === 0 })));
+    (config.calendars || []).forEach((c, i) => { const o = typeof c === "string" ? { entity: c } : c; if (o && o.entity) this._sources.push({ entity: o.entity, person: -1, colour: o.colour || "#FFFDF4", name: o.name || "", icon: o.icon, add: o.add !== false }); });
     if (!this._from) this._from = this._start(new Date());
     if (!this.shadowRoot) {
       ensureFont();
       this.attachShadow({ mode: "open" });
-      this.shadowRoot.innerHTML = `<style>${BASE}${CAL_STYLE}</style><ha-card><div class="top"><div class="roofus"></div><div class="bubble" aria-live="polite"></div></div>
+      this.shadowRoot.innerHTML = `<style>${BASE}${CAL_STYLE}</style><ha-card><div class="links"></div><div class="top"><div class="roofus"></div><div class="bubble" aria-live="polite"></div></div>
         <div class="nav"><h2></h2><button class="btn" data-act="prev" aria-label="Earlier">${ICON.back}</button><button class="btn" data-act="today">Today</button><button class="btn" data-act="next" aria-label="Later">${ICON.next}</button><button class="btn go" data-act="new">+ Add</button></div>
         <div class="week"></div><div class="hw" style="display:none"><h3>${ICON.study}<span></span></h3><div class="list"></div></div>
         <dialog><h3>Something new on the calendar</h3><label for="what">What is it?</label><input id="what" type="text" autocomplete="off" maxlength="80">
@@ -358,6 +363,7 @@ class ToonCalendarCard extends HTMLElement {
   _render() {
     const root = this.shadowRoot, from = this._from, today = day0(new Date()), box = root.querySelector(".week"), evs = this._events;
     root.querySelector(".week").style.setProperty("--days", this._days);
+    root.querySelector(".links").innerHTML = linksHtml(this._config.links);
     const last = addDays(from, this._days - 1), f = (d, o) => d.toLocaleDateString([], o);
     root.querySelector(".nav h2").textContent = this._days === 1 ? f(from, { weekday: "long", day: "numeric", month: "long" }) : `${f(from, { day: "numeric", month: from.getMonth() === last.getMonth() ? undefined : "short" })} to ${f(last, { day: "numeric", month: "long" })}`;
     const cols = Array.from({ length: this._days }, () => []);
@@ -380,9 +386,10 @@ class ToonCalendarCard extends HTMLElement {
     else this._say(title, `Today: ${mine.slice(0, 3).map((e) => e.title).join(", ")}${mine.length > 3 ? ` and ${mine.length - 3} more` : ""}.`, "happy");
   }
   _writable() {
-    return this._sources.map((s, i) => ({ ...s, i })).filter((s) => { const st = this._hass && this._hass.states[s.entity]; return st && st.state !== "unavailable" && (Number(st.attributes.supported_features) & 1); });
+    return this._sources.map((s, i) => ({ ...s, i })).filter((s) => { const st = this._hass && this._hass.states[s.entity]; return s.add && st && st.state !== "unavailable" && (Number(st.attributes.supported_features) & 1); });
   }
   async _click(e) {
+    if (followLink(e)) return;
     const root = this.shadowRoot, act = e.target.closest("[data-act]"), hw = e.target.closest("[data-hw]"), who = e.target.closest("[data-who]"), when = e.target.closest("[data-when]");
     if (who) { this._who = Number(who.dataset.who); root.querySelectorAll("[data-who]").forEach((b) => b.classList.toggle("on", b === who)); return; }
     if (when) { this._when = Number(when.dataset.when); root.querySelectorAll("[data-when]").forEach((b) => b.classList.toggle("on", b === when)); return; }
