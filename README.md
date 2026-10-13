@@ -179,7 +179,7 @@ people:
     picture: /local/faces/mia.png     # or use your own picture instead of a drawn face
 ```
 
-`skin` is `peach`, `fair`, `tan`, `brown`, `dark` or `sunny`, or any colour. Without a `look`, a person with a `person` entity uses that entity's picture.
+`skin` is `peach`, `fair`, `tan`, `brown`, `dark` or `sunny`, or any colour. Add `style: sunny` for a second way of drawing the face: yellow skin, big round eyes and a wide grin. Without a `look`, a person with a `person` entity uses that entity's picture.
 
 ### Calendar card
 

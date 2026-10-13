@@ -71,3 +71,9 @@ for (const look of [...LOOKS, { type: "dad", beard: true, glasses: true }, { typ
 }
 assert.equal(lookOf("nobody").type, "dad", "an unknown look falls back to a plain one");
 console.log("people tests passed");
+for (const look of [{ type: "dad", style: "sunny", beard: true }, { type: "baby", style: "sunny" }, { type: "mum", style: "sunny", glasses: true }]) {
+  const svg = avatar(look, "#fff");
+  for (const tag of svg.match(/<[a-zA-Z][^>]*>/g)) { const names = [...tag.matchAll(/\s([a-zA-Z-]+)=/g)].map((m) => m[1]); assert.equal(new Set(names).size, names.length, `repeated attribute in ${tag.slice(0, 70)}`); }
+  assert.ok(svg.includes("#FFD83A"), "the sunny style has yellow skin unless a skin is chosen");
+}
+assert.ok(!avatar({ type: "dad", style: "sunny", skin: "brown" }).includes('fill="#FFD83A"'), "a chosen skin wins over the style");

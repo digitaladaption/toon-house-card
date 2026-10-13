@@ -1,6 +1,6 @@
 {
   "name": "toon-house-card",
-  "version": "0.9.1",
+  "version": "0.9.2",
   "description": "A cartoon 3D dollhouse of your home for Home Assistant, built from a simple floor plan file",
   "license": "MIT",
   "private": true,
