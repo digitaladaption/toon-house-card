@@ -12,7 +12,8 @@ const BASE = `${LINKS_STYLE}
   .links{margin:0 0 10px}
   :host{display:block;font-family:${FONT};font-weight:500;color:#1b1b1b;--ink:#1b1b1b;--sun:#FFD83A;--paper:#FFFDF4}
   *{box-sizing:border-box}
-  ha-card{display:block;background:linear-gradient(#6CCBFA,#9ADCFC);border:3px solid var(--ink);border-radius:18px;padding:12px;overflow:hidden;position:relative;min-height:var(--toon-family-min-h,0)}
+  ha-card{display:block;background:linear-gradient(#6CCBFA,#9ADCFC);border:3px solid var(--ink);border-radius:18px;padding:12px;overflow:hidden;position:relative;min-height:var(--toon-family-min-h,0);display:flex;flex-direction:column}
+  .week{flex:1}
   .top{display:flex;gap:10px;align-items:flex-start;flex-wrap:wrap}
   .roofus{flex:none;width:70px}
   .roofus svg{display:block;width:100%}
@@ -92,6 +93,8 @@ class ToonChoresCard extends HTMLElement {
   setConfig(config) {
     if (!config || !Array.isArray(config.people) || !config.people.length) throw new Error('Add a "people" list, each with a name and a "chores" to-do list.');
     this._config = config;
+    // fill: true makes the card as tall as the screen, for a page with nothing else on it
+    if (config.fill) this.style.setProperty("--toon-family-min-h", "100vh"); else this.style.removeProperty("--toon-family-min-h");
     this._people = people(config);
     this._items = this._items || {};
     this._seen = {};
@@ -277,6 +280,8 @@ class ToonCalendarCard extends HTMLElement {
   setConfig(config) {
     if (!config || (!Array.isArray(config.people) && !Array.isArray(config.calendars))) throw new Error('Add a "people" list (each with a name and a calendar) or a "calendars" list.');
     this._config = config;
+    // fill: true makes the card as tall as the screen, for a page with nothing else on it
+    if (config.fill) this.style.setProperty("--toon-family-min-h", "100vh"); else this.style.removeProperty("--toon-family-min-h");
     this._people = people(config);
     this._days = Math.max(1, Math.min(14, Number(config.days) || 7));
     // every calendar that is drawn, and whose face goes on its events

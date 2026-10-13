@@ -225,7 +225,7 @@ links:
   - { name: Chores, path: /my-dashboard/chores, icon: star }
 ```
 
-The page you are on is picked out in yellow. Moving between pages does not reload Home Assistant, and `?kiosk` in the address is kept.
+On a page with nothing else on it, add `fill: true` to the calendar or chores card and it grows to the height of the screen. The page you are on is picked out in yellow. Moving between pages does not reload Home Assistant, and `?kiosk` in the address is kept.
 
 ### Who is where, in the house
 
