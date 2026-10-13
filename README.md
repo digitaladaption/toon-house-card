@@ -227,6 +227,22 @@ links:
 
 On a page with nothing else on it, add `fill: true` to the calendar or chores card and it grows to the height of the screen. The page you are on is picked out in yellow. Moving between pages does not reload Home Assistant, and `?kiosk` in the address is kept.
 
+### A screensaver for the wall
+
+Any of the three cards can turn the tablet into a picture frame when nobody is using it:
+
+```yaml
+screensaver:
+  after: 300          # seconds with no touch before it starts
+  every: 30           # seconds each picture stays
+  pictures:
+    - /local/pictures/beach.jpg
+    - /local/pictures/garden.jpg
+  weather: weather.home   # optional: the temperature under the clock
+```
+
+Your pictures fade from one to the next with a big clock and the date. A touch brings the dashboard back, and that touch does not press whatever was underneath. After dark (by `sun.sun`) it dims; `dim: false` stops that, and `clock: false` hides the clock. Give every card on the tablet the same setting so it works on every page. To see it straight away, add `?screensaver` to the page address. [Try it on the demo](https://digitaladaption.github.io/toon-house-card/demo/?screensaver).
+
 ### Who is where, in the house
 
 Give the house card the same `people` and they stand in the rooms they are in:
@@ -286,6 +302,7 @@ Or pick it in the card editor under **The look → Weather outside**. Any Home A
 | `quality` | `auto` | `full`, `light` (for older tablets), or `auto` to let the card choose |
 | `replay` | `true` | `false` hides the Replay button |
 | `links` | | Big tabs to other dashboard pages: `[{ name, path, icon }]`. See [tabs](#tabs-between-the-pages) |
+| `screensaver` | | Pictures and a clock when the tablet is left alone. See [a screensaver for the wall](#a-screensaver-for-the-wall) |
 | `people` | | The family, drawn in the rooms they are in. See [the family](#the-family-calendar-chores-and-who-is-where) |
 | `planned_path` | | A dashboard path to open when a planned (grey) device is tapped |
 

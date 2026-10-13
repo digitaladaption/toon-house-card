@@ -13,6 +13,7 @@ import { applyOverlay } from "./layout.js";
 import { ensureFont, FONT } from "./font.js";
 import { RoomPanel, ROOM_STYLE } from "./room.js";
 import { linksHtml, followLink, LINKS_STYLE } from "./links.js";
+import { useScreensaver, leaveScreensaver } from "./screensaver.js";
 import { Replay, REPLAY_STYLE } from "./replay.js";
 import { avatar, COLOURS } from "./people.js";
 import { roomWords } from "./match.js";
@@ -20,7 +21,7 @@ import { Weather, readWeather, weatherKey, tintTheme, tintKey } from "./weather.
 import "./editor.js";
 import "./family.js";
 
-const VERSION = "0.9.2";
+const VERSION = "0.9.3";
 const SILL = 0.9, HEAD = 2.1, DOOR_HEAD = 2.05, GAP = 0.2;
 const tex = (pattern, a, b) => `tex|${pattern}|${a}|${b || ""}`;
 const esc = (s) => String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/"/g, "&quot;");
@@ -124,6 +125,7 @@ class ToonHouseCard extends HTMLElement {
   }
   set hass(hass) {
     this._live = hass;
+    if (this._connected && this._config && this._config.screensaver) useScreensaver(this, this._config.screensaver, hass);
     const b = this.shadowRoot && this.shadowRoot.querySelector(".rp");
     if (b) b.style.display = hass && hass.callWS && this._config.replay !== false ? "" : "none";
     // while the past is on show, the present waits
@@ -145,10 +147,12 @@ class ToonHouseCard extends HTMLElement {
   }
   connectedCallback() {
     this._connected = true;
+    if (this._config) useScreensaver(this, this._config.screensaver, this._hass);
     this._ensure();
   }
   disconnectedCallback() {
     this._connected = false;
+    leaveScreensaver(this);
     if (this._replay) this._replay.stop();
     this._teardown();
   }
@@ -296,6 +300,7 @@ class ToonHouseCard extends HTMLElement {
     this._mode = idx >= 0 ? idx : /^\d+$/.test(first) && Number(first) < this._floors.length ? Number(first) : first === "ground" ? 0 : "whole";
   }
   _header() {
+    if (this._connected) useScreensaver(this, this._config.screensaver, this._hass);
     this.shadowRoot.querySelector(".links").innerHTML = linksHtml(this._config.links);
     this.shadowRoot.querySelector("h1").textContent = this._config.title != null ? this._config.title : (this._layout && this._layout.title) || "";
   }

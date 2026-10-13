@@ -4,6 +4,7 @@ import { roofus, ICON } from "./art.js";
 import { ensureFont, FONT } from "./font.js";
 import { faceHtml, COLOURS } from "./people.js";
 import { linksHtml, followLink, LINKS_STYLE } from "./links.js";
+import { useScreensaver, leaveScreensaver } from "./screensaver.js";
 
 const esc = (s) => String(s == null ? "" : s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/"/g, "&quot;");
 const STAR = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" aria-hidden="true"><path d="M16 3.500l3.800 8 8.700 1.100-6.400 6 1.700 8.700L16 23l-7.800 4.300 1.700-8.700-6.400-6 8.700-1.100z" fill="var(--star,#fff)" stroke="#1b1b1b" stroke-width="2.400" stroke-linejoin="round"/></svg>`.replace(/\.(\d)00/g, ".$1");
@@ -115,8 +116,11 @@ class ToonChoresCard extends HTMLElement {
   }
   set hass(hass) {
     this._hass = hass;
+    if (this.isConnected && this._config && this._config.screensaver) useScreensaver(this, this._config.screensaver, hass);
     this._load();
   }
+  connectedCallback() { if (this._config) useScreensaver(this, this._config.screensaver, this._hass); }
+  disconnectedCallback() { leaveScreensaver(this); }
   getCardSize() { return 8; }
   _say(title, text, mood = "happy") {
     this.shadowRoot.querySelector(".roofus").innerHTML = roofus(mood);
@@ -310,14 +314,16 @@ class ToonCalendarCard extends HTMLElement {
   set hass(hass) {
     const first = !this._hass;
     this._hass = hass;
+    if (this.isConnected && this._config && this._config.screensaver) useScreensaver(this, this._config.screensaver, hass);
     if (first) this._load(true);
     else { this._load(false); this._homework(false); }
   }
   connectedCallback() {
+    if (this._config) useScreensaver(this, this._config.screensaver, this._hass);
     // calendars do not announce new events, so look again every few minutes
     this._timer = setInterval(() => this._load(true), 5 * 60 * 1000);
   }
-  disconnectedCallback() { clearInterval(this._timer); }
+  disconnectedCallback() { clearInterval(this._timer); leaveScreensaver(this); }
   getCardSize() { return 9; }
   _start(d) {
     const t = day0(d);
