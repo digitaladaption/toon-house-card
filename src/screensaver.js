@@ -2,6 +2,7 @@
    one after another, with a big clock. A touch brings the dashboard back. Any toon card can switch it on:
      screensaver: { after: 300, every: 30, pictures: [/local/a.jpg, /local/b.jpg], clock: 24 }
    clock: 24 or 12 picks the kind of clock, true leaves it to the device, false hides it.
+   fit: fill makes each picture cover the whole screen.
    One screensaver serves the whole page, whichever card asked for it. */
 import { ensureFont, FONT } from "./font.js";
 
@@ -12,6 +13,7 @@ const STYLE = `
   .thc-saver .bg,.thc-saver .pic{position:absolute;inset:0;background-position:center 30%;background-repeat:no-repeat;opacity:0;transition:opacity 1.6s ease}
   .thc-saver .bg{background-size:cover;filter:blur(26px) brightness(.55);transform:scale(1.15)}
   .thc-saver .pic{background-size:contain;inset:3vh 3vw;animation:thc-drift 40s ease-in-out infinite alternate}
+  .thc-saver.fill .pic{background-size:cover;inset:0}
   .thc-saver .show{opacity:1}
   @keyframes thc-drift{from{transform:scale(1)}to{transform:scale(1.045)}}
   .thc-saver .clock{position:absolute;left:4vw;bottom:5vh;text-shadow:0 0 0 #000,3px 4px 0 #1b1b1b,-2px -2px 0 #1b1b1b,2px -2px 0 #1b1b1b,-2px 2px 0 #1b1b1b;line-height:1}
@@ -106,6 +108,8 @@ export function useScreensaver(user, config, hass) {
   S.config = c;
   S.key = key;
   S.el.querySelector(".clock").style.display = c.clock === false ? "none" : "";
+  // fit: fill stretches each picture to the edges of the screen (trimming what does not fit) instead of showing all of it
+  S.el.classList.toggle("fill", c.fit === "fill" || c.fit === "cover");
   arm();
   // to see it straight away, add ?screensaver to the page address
   if (new URLSearchParams(location.search).has("screensaver")) show();

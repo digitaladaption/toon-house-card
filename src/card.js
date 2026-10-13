@@ -21,7 +21,7 @@ import { Weather, readWeather, weatherKey, tintTheme, tintKey } from "./weather.
 import "./editor.js";
 import "./family.js";
 
-const VERSION = "0.9.4";
+const VERSION = "0.9.5";
 const SILL = 0.9, HEAD = 2.1, DOOR_HEAD = 2.05, GAP = 0.2;
 const tex = (pattern, a, b) => `tex|${pattern}|${a}|${b || ""}`;
 const esc = (s) => String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/"/g, "&quot;");
