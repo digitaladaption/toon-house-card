@@ -13,7 +13,7 @@ const BASE = `${LINKS_STYLE}
   .links{margin:0 0 10px}
   :host{display:block;font-family:${FONT};font-weight:500;color:#1b1b1b;--ink:#1b1b1b;--sun:#FFD83A;--paper:#FFFDF4}
   *{box-sizing:border-box}
-  ha-card{display:block;background:linear-gradient(#6CCBFA,#9ADCFC);border:3px solid var(--ink);border-radius:18px;padding:12px;overflow:hidden;position:relative;min-height:var(--toon-family-min-h,0);display:flex;flex-direction:column}
+  ha-card{display:block;color:var(--ink);background:linear-gradient(#6CCBFA,#9ADCFC);border:3px solid var(--ink);border-radius:18px;padding:12px;overflow:hidden;position:relative;min-height:var(--toon-family-min-h,0);display:flex;flex-direction:column}
   .week{flex:1}
   .top{display:flex;gap:10px;align-items:flex-start;flex-wrap:wrap}
   .roofus{flex:none;width:70px}
