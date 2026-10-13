@@ -4,6 +4,10 @@ A cartoon 3D dollhouse of your home for Home Assistant. You describe your rooms,
 
 ![The example house from outside](docs/img/outside.png)
 
+**From a floor plan picture to a working house, in under a minute:**
+
+![Walk-through: drop in a floor plan, name the rooms, connect a radiator, tap a room, watch the weather](docs/img/walkthrough.gif)
+
 **Try it now:** [turn your floor plan picture into a house](https://digitaladaption.github.io/toon-house-card/importer/) · [play with the example house](https://digitaladaption.github.io/toon-house-card/demo/)
 
 | Ground floor | Upstairs | "brick" theme |
