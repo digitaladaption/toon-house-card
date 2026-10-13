@@ -91,6 +91,16 @@
     }
     return out;
   }
+  // stands in for pairing a new radiator valve with Home Assistant: it and its extra readings appear a moment later
+  window.demoNewDevice = () => {
+    SPARE["climate.new_radiator_valve"] = ["heat", "New radiator valve"];
+    states["climate.new_radiator_valve"] = { entity_id: "climate.new_radiator_valve", state: "heat", attributes: { friendly_name: "New radiator valve", current_temperature: 18.5, temperature: 19, hvac_action: "idle" } };
+    states["sensor.new_radiator_valve_battery"] = { entity_id: "sensor.new_radiator_valve_battery", state: "100", attributes: { friendly_name: "New radiator valve battery", unit_of_measurement: "%", device_class: "battery" } };
+    states["switch.new_radiator_valve_child_lock"] = { entity_id: "switch.new_radiator_valve_child_lock", state: "off", attributes: { friendly_name: "New radiator valve child lock" } };
+    entities["sensor.new_radiator_valve_battery"] = { entity_category: "diagnostic" };
+    entities["switch.new_radiator_valve_child_lock"] = { entity_category: "config" };
+    push();
+  };
   function callService(domain, service, data) {
     const s = states[data.entity_id], spare = SPARE[data.entity_id];
     window.lastCall = { domain, service, data };
@@ -157,6 +167,14 @@
     document.body.classList.add("editing");
   }
   document.getElementById("edit").onclick = openEditor;
+  // On this page nothing can really be paired, so a new valve "joins" a few seconds after the editor starts watching for one.
+  if (!q.has("nopair")) setInterval(() => {
+    const w = editor && editor._setup && editor._setup.watch;
+    if (!w) { window.pairAt = 0; return; }
+    if (states["climate.new_radiator_valve"]) return;
+    window.pairAt = window.pairAt || Date.now() + 5000;
+    if (Date.now() >= window.pairAt) window.demoNewDevice();
+  }, 500);
   document.getElementById("closeEdit").onclick = () => { document.getElementById("drawer").classList.remove("open"); document.body.classList.remove("editing"); };
   if (q.has("editor")) openEditor();
   document.getElementById("theme").onclick = (e) => { theme = theme === "brick" ? "toon" : "brick"; e.target.textContent = theme === "brick" ? "Cartoon look" : "Brick look"; make(); };

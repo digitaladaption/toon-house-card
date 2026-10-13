@@ -16,7 +16,7 @@ import { Replay, REPLAY_STYLE } from "./replay.js";
 import { Weather, readWeather, weatherKey, tintTheme, tintKey } from "./weather.js";
 import "./editor.js";
 
-const VERSION = "0.8.0";
+const VERSION = "0.8.1";
 const SILL = 0.9, HEAD = 2.1, DOOR_HEAD = 2.05, GAP = 0.2;
 const tex = (pattern, a, b) => `tex|${pattern}|${a}|${b || ""}`;
 const esc = (s) => String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/"/g, "&quot;");

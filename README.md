@@ -136,6 +136,8 @@ While you are editing the card, tap anything, on the plan, in the list or on the
 2. **Try it.** The live reading, and buttons to switch a light, move a blind or nudge a radiator up or down, so you can see it is the right one. Nothing is switched unless you press a button, and locks are never touched.
 3. **Finish.** Name it, move it or remove it.
 
+**Just bought it?** In step 1, press **I've got a new one to add**. The window tells you how to pair it with Home Assistant, opens the devices page beside the editor, and watches. The moment the new device appears, Roofus shows it and one tap connects it. (Pairing itself is Home Assistant's job: a Zigbee valve needs a Zigbee stick, for example.) On the demo page a pretend valve joins after a few seconds so you can see it happen.
+
 | Pick it | Try it |
 |---|---|
 | ![Picking the real device](docs/img/setup-pick.png) | ![Trying it](docs/img/setup-try.png) |

@@ -46,6 +46,16 @@ export const SETUP_STYLE = `
   .opt small{grid-column:1;font-size:12px;opacity:.8;overflow-wrap:anywhere}
   .opt .val{grid-column:2;grid-row:1 / span 2;font-weight:700;font-size:13px;border:2px solid var(--ink);border-radius:999px;padding:1px 9px;background:var(--paper);white-space:nowrap;max-width:120px;overflow:hidden;text-overflow:ellipsis}
   .opt.none{background:#eee;border-style:dashed;box-shadow:none}
+  .opt.new{background:#FFF3B8}
+  .opt.new.lead,.opt.found{background:#9BE37A}
+  .wait{display:flex;justify-content:center;gap:10px;padding:14px 0 4px}
+  .wait span{width:16px;height:16px;border-radius:50%;background:#7A4FC4;border:3px solid var(--ink);animation:hop 1s infinite ease-in-out}
+  .wait span:nth-child(2){animation-delay:.15s;background:var(--sun)}
+  .wait span:nth-child(3){animation-delay:.3s;background:#FF8A73}
+  @keyframes hop{0%,60%,100%{transform:translateY(0)}30%{transform:translateY(-12px)}}
+  @media (prefers-reduced-motion:reduce){.wait span{animation:none}}
+  .how{margin:8px 0;padding-left:22px;font-size:14px;line-height:1.4}
+  .how li{margin:4px 0}
   .opt:focus-visible{outline:4px solid #7A4FC4;outline-offset:2px}
   .now{border:3px solid var(--ink);border-radius:16px;background:#fff;padding:12px;text-align:center;box-shadow:2px 3px 0 var(--ink)}
   .now.hot{background:#FFD83A}
@@ -101,6 +111,7 @@ export class Setup {
     this.id = id;
     this.query = "";
     this.wide = false;
+    this.watch = null;
     this.fresh = fresh;
     const now = this._now();
     if (!now) return;
@@ -113,6 +124,7 @@ export class Setup {
   }
   close() { if (this.dlg.open) this.dlg.close(); }
   go(step) {
+    if (step !== "pick") this.watch = null;
     this.step = step;
     this.render();
     this._q(".s-body").scrollTop = 0;
@@ -135,7 +147,9 @@ export class Setup {
     if (!now) { this.close(); return; }
     this._head();
     const { d, room, ent, st } = now, body = this._q(".s-body"), what = WHAT[d.kind] || "device", name = d.name || "this";
-    if (this.step === "pick") {
+    if (this.step === "pick" && this.watch) {
+      this._waiting(true);
+    } else if (this.step === "pick") {
       body.innerHTML = `<input id="sq" type="search" placeholder="Search your devices" autocomplete="off" spellcheck="false" aria-label="Search your devices" value="${esc(this.query)}"><div id="opts"></div>`;
       this._say(this.fresh ? `${name} is on the plan!` : `Which one is ${name}?`, `Tap the real ${what} from Home Assistant.${room ? ` My best guesses for the ${room} are at the top.` : ""}`, this.fresh ? "party" : "think");
       this._options();
@@ -179,16 +193,49 @@ export class Setup {
     if (rest.length) out += `<h4>${guesses.length ? "Everything else" : "Your devices"}</h4>${rest.map(row).join("")}`;
     if (!list.length) out += `<p class="hint">${this.query ? "Nothing matches that. Try fewer letters." : `I can't find a ${esc(WHAT[d.kind] || "device")} in Home Assistant yet.`}</p>`;
     if (list.length > MAX) out += `<p class="hint">${list.length - MAX} more. Type in the search box to find them.</p>`;
-    out += `<h4>Or</h4>`;
+    out += `<h4>Or</h4><button class="opt new${list.length ? "" : " lead"}" data-act="new"><b>I've got a new one to add</b><small>Pair it with Home Assistant now and I'll spot it</small></button>`;
     if (!this.wide) out += `<button class="opt none" data-act="wide"><b>Show every kind of device</b><small>If yours is not in the list</small></button>`;
     out += `<button class="opt none${ent ? "" : " on"}" data-ent=""><b>I haven't got it yet</b><small>Keep it grey on the card as "planned"</small></button>`;
     box.innerHTML = out;
+  }
+  // ---------- a brand new device: wait for it to appear in Home Assistant ----------
+  // everything that has appeared since the wait began, the ones that fit this kind of thing first
+  _arrivals() {
+    const now = this._now();
+    if (!now || !now.hass || !this.watch) return { fit: [], other: 0 };
+    const fresh = Object.keys(now.hass.states).filter((id) => !this.watch.base.has(id));
+    if (!fresh.length) return { fit: [], other: 0 };
+    const only = { ...now.hass, states: Object.fromEntries(fresh.map((id) => [id, now.hass.states[id]])) };
+    const fit = rank(only, now.d.kind, now.room, { used: this.ed.usedBy(now.d.id) });
+    return { fit, other: this.watch.all ? 0 : rank(only, now.d.kind, now.room, { wide: true }).length - fit.length, all: this.watch.all ? rank(only, now.d.kind, now.room, { wide: true }) : null };
+  }
+  _waiting(force) {
+    const now = this._now(), body = this._q(".s-body");
+    if (!now) return;
+    const { d, room, hass } = now, what = WHAT[d.kind] || "device", got = this._arrivals(), list = got.all || got.fit;
+    const sig = `${list.map((o) => o.id).join(",")}|${got.other}`;
+    if (!force && sig === this.watch.sig) return;
+    this.watch.sig = sig;
+    const url = hass && typeof hass.hassUrl === "function" ? hass.hassUrl("/config/devices/dashboard") : "";
+    const row = (o) => `<button class="opt found" data-ent="${esc(o.id)}"><b>${esc(o.name)}</b><small>${esc([o.area, o.id].filter(Boolean).join(" · "))}</small><span class="val">${esc(stateText(hass.states[o.id]))}</span></button>`;
+    if (list.length) {
+      body.innerHTML = `<h4>Just appeared in Home Assistant</h4>${list.map(row).join("")}<div class="row"><button class="btn" data-act="list">Back to the list</button></div>`;
+      this._say(list.length === 1 ? "I spotted a new one!" : `I spotted ${list.length} new ones!`, `Is ${list.length === 1 ? `"${list[0].name}"` : "one of these"} your ${d.name || what}? Tap it and we'll try it.`, "party");
+      return;
+    }
+    body.innerHTML = `<div class="wait"><span></span><span></span><span></span></div>
+      <ol class="how"><li>Open Home Assistant's devices page${url ? "" : " (Settings, Devices and services)"} and press <b>Add device</b>.</li><li>Put your new ${esc(what.split(",")[0].replace(/ \(.*/, ""))} into pairing mode. Its leaflet says how: usually you hold its button.</li><li>When Home Assistant asks, give it the area${room ? ` <b>${esc(room)}</b>` : ""} and finish.</li></ol>
+      ${url ? `<div class="row"><a class="btn go" href="${esc(url)}" target="_blank" rel="noopener">${ICON.plug}Open the devices page</a></div>` : ""}
+      ${got.other ? `<p class="hint" style="text-align:center">${got.other} new thing${got.other === 1 ? " has" : "s have"} appeared, but ${got.other === 1 ? "it does" : "they do"} not look like a ${esc(what.split(",")[0].replace(/ \(.*/, ""))}.</p><div class="row"><button class="btn" data-act="showall">Show ${got.other === 1 ? "it" : "them"} anyway</button></div>` : ""}
+      <div class="row"><button class="btn" data-act="list">Back to the list</button></div>`;
+    this._say("I'm watching for it...", `Leave this window open and pair your new ${what.split(",")[0].replace(/ \(.*/, "")} with Home Assistant. The moment it appears, I'll show it here.`, "think");
   }
   _choose(ent) {
     const now = this._now();
     if (!now) return;
     if (!this.ed._link(now.d, ent)) return;
     this.fresh = false;
+    this.watch = null;
     this.go(ent ? "try" : "done");
   }
 
@@ -237,6 +284,9 @@ export class Setup {
     if (act === "close") { this.close(); return; }
     if (!now) return;
     if (act === "wide") { this.wide = true; this._options(); return; }
+    if (act === "new") { this.watch = { base: new Set(Object.keys((now.hass && now.hass.states) || {})), sig: "" }; this.render(); this._q(".s-body").scrollTop = 0; return; }
+    if (act === "showall") { this.watch.all = true; this._waiting(true); return; }
+    if (act === "list") { this.watch = null; this.render(); return; }
     if (act === "move") { const id = this.id; this.close(); this.ed._moveMode(id); return; }
     if (act === "remove") { const id = this.id; this.close(); this.ed._remove(id); return; }
     const { ent, st, hass } = now;
@@ -257,6 +307,7 @@ export class Setup {
     const now = this._now();
     if (!now) { this.close(); return; }
     if (this.step === "try") this._live();
+    else if (this.step === "pick" && this.watch) this._waiting(false);
     else if (this.step === "pick" && now.hass) {
       if (Object.keys(now.hass.states).length !== this._count) { this._options(); return; }
       this.dlg.querySelectorAll(".opt[data-ent]").forEach((b) => { const v = b.querySelector(".val"); if (v && b.dataset.ent) v.textContent = stateText(now.hass.states[b.dataset.ent]); });
